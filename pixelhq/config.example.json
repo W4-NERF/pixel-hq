@@ -6,7 +6,7 @@
   "orchestrator_profile": "default",
   "hermes_home": "~/.hermes",
   "ledger_path": "~/.hermes/quality/ledger.jsonl",
-  "exclude_boards": ["bothq-sandbox"],
+  "exclude_boards": ["pixel-hq-sandbox"],
   "stale_days": 14,
   "needs_input_keywords": ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"],
   "xp": {"pass": 10, "revise": 3, "fail": -5},

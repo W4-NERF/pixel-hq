@@ -1,4 +1,4 @@
-"""Bot-HQ live view: what is every bot doing right now? Read-only and fast (built for 10-s polling).
+"""Pixel HQ live view: what is every bot doing right now? Read-only and fast (built for 10-s polling).
 
 Sources: <profile>/state.db (active sessions — Hermes records `last_activity_description` per step,
 e.g. "terminal command running (170s elapsed)"; last tool call from `messages`) and the Kanban boards

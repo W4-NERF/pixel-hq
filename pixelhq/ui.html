@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bot-HQ</title>
+<title>Pixel HQ</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Silkscreen&display=swap');
 :root{--bg:#0B0F14;--bg2:#10161E;--card:#131B24;--card2:#18222D;--fg:#DCE4EC;--mut:#7E8B99;--mut2:#93A1AF;
@@ -115,7 +115,7 @@ button[data-act="archive"]{color:#D98A5C}
 .res{font-size:11px;margin-top:4px}.res.ok{color:var(--olive)}.res.bad{color:var(--rust)}
 #bres .res{border-left:3px solid var(--line);padding:2px 8px;margin:2px 0}#bres .res.ok{border-left-color:var(--olive)}#bres .res.bad{border-left-color:var(--rust)}
 </style></head><body>
-<header class="hdr"><div class="l"><span class="px" style="font-size:20px" id="brand">BOT-HQ</span>
+<header class="hdr"><div class="l"><span class="px" style="font-size:20px" id="brand">PIXEL HQ</span>
 <span><button class="on" data-tab="office">Office</button> <button data-tab="live" id="livetab">Live</button> <button data-tab="board">Leaderboard</button> <button data-tab="blk" id="blktab">Blocked</button></span></div>
 <div style="display:flex;gap:8px;align-items:center"><span class="tag" id="stand"></span><button id="reload">Reload</button></div></header>
 <div class="hud" id="hud"></div>
@@ -150,7 +150,7 @@ button[data-act="archive"]{color:#D98A5C}
 
 <script>
 /* Every string coming from cards, sessions or the ledger goes through esc() before it touches innerHTML. */
-let DATA = /*BOTHQ_DATA*/null;
+let DATA = /*PIXELHQ_DATA*/null;
 let LIVE = null, LIVE_ERR = null;
 const CFG = () => (DATA && DATA.cfg) || {locale:'en-GB', timezone:'UTC', xp:{pass:10,revise:3,fail:-5}, staleDays:14, rooms:[], operator:'operator', orchestrator:'default'};
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -239,7 +239,7 @@ function board(){zoneFilters();const rows=DATA.bots.filter(b=>bzone==='all'||b.z
 function hud(){const bs=DATA.bots,sum=k=>bs.reduce((a,b)=>a+(b[k]||0),0);const party=sum('n')?Math.round(100*sum('p')/sum('n')):0;
  const g=DATA.reactor,gpu=g?g.nodes.map(n=>esc(n.id)+' '+(n.util??'–')+'%').join(' · ')||'–':'–';
  const reactor=g&&g.srv&&g.srv.decodeTps!=null?tps(g.srv.decodeTps)+' tok/s':gpu;
- document.getElementById('brand').textContent=CFG().label||'BOT-HQ';
+ document.getElementById('brand').textContent=CFG().label||'PIXEL HQ';
  document.getElementById('hud').innerHTML=[['PARTY HP',party+'%','pass rate across all reviews'],['ACTIVE BOTS',bs.filter(b=>liveStatus(b).status==='running').length+'/'+bs.length,LIVE?'live as of '+clock(LIVE.generated):'snapshot'],['BLOCKED QUESTS',sum('blocked'),'Kanban, all boards'],['TOTAL XP',fmtN(sum('xp')),''],['REACTOR',reactor,g?'decode throughput (5 min) · GPU '+gpu.replace(/<[^>]*>/g,''):'not configured']].map(x=>'<div title="'+x[2]+'"><div class="k">'+x[0]+'</div><div class="v">'+x[1]+'</div></div>').join('');
  document.getElementById('stand').textContent=(DATA.demo?'DEMO DATA · ':'')+'as of '+clock(DATA.generated);
  const x=CFG().xp;document.getElementById('foot').textContent='XP: pass '+(x.pass>0?'+':'')+x.pass+' · revise '+(x.revise>0?'+':'')+x.revise+' · fail '+x.fail+' · level = 1 + floor(sqrt(XP/25)) · HP = pass rate · sub-agents count for the bot that spawned them · collector '+DATA.collectMs+' ms · read-only'+(CFG().configError?' · '+CFG().configError:'');}
@@ -268,7 +268,7 @@ function bindActions(){document.querySelectorAll('[data-ta]').forEach(t=>{t.valu
   if((act==='answer'||act==='comment')&&text.length<3){results[key]={ok:false,error:'Please enter some text first (at least 3 characters).'};blk();return}
   if(CONFIRM.has(act)&&btn.dataset.armed!=='1'){btn.dataset.armed='1';btn.classList.add('armed');btn.textContent='Confirm: '+ALAB[act]+'?';
    setTimeout(()=>{if(btn.isConnected){btn.dataset.armed='';btn.classList.remove('armed');btn.textContent=ALAB[act]}},6000);return}
-  pend[key]=true;delete results[key];blk();window.parent.postMessage({bothqAction:{board,id,action:act,text}},'*')})}
+  pend[key]=true;delete results[key];blk();window.parent.postMessage({pixelhqAction:{board,id,action:act,text}},'*')})}
 function onActionResult(r){const key=(r.board||'')+'/'+(r.id||'');delete pend[key];results[key]=r;if(r.ok)delete drafts[key];pushRes(!!r.ok,r.message||r.error||'?');blk()}
 function blk(){const all=DATA.blockers||[];document.getElementById('blktab').textContent='Blocked ('+all.length+')';
  const cnt=k=>all.filter(b=>k==='all'||b.cat===k).length;
@@ -299,7 +299,7 @@ document.getElementById('btriage').onclick=()=>{const tb=document.getElementById
  if(tb.dataset.armed!=='1'){tb.dataset.armed='1';tb.classList.add('armed');tb.textContent='Confirm: start triage for '+triageSel.length+' cards?';
   setTimeout(()=>{tb.dataset.armed='';tb.classList.remove('armed');blk()},6000);return}
  tb.dataset.armed='';tb.classList.remove('armed');triagePending=true;blk();
- window.parent.postMessage({bothqTriage:{keys:triageSel.slice(0,80),scope:scopeLabel()}},'*')};
+ window.parent.postMessage({pixelhqTriage:{keys:triageSel.slice(0,80),scope:scopeLabel()}},'*')};
 /* ---- live ---- */
 const SRC={desktop:'desktop',kanban:'kanban',cron:'cron',subagent:'sub',cli:'cli',oneshot:'oneshot',matrix:'matrix',discord:'discord',email:'mail',tool:'tool'};
 const dur=s=>s<90?Math.round(s)+' s':s<5400?Math.round(s/60)+' min':Math.round(s/360)/10+' h';
@@ -323,16 +323,16 @@ function liveTab(){const tabEl=document.getElementById('livetab');const note=doc
 function liveRender(){try{hud();office();liveTab()}catch(e){setStand('live render error: '+e)}}
 function renderAll(){hud();office();board();blk();liveTab()}
 /* Embedded (desktop plugin, sandboxed iframe): data arrives via postMessage from the host, "Reload" asks
-   the host. Standalone (dist/bot-hq.html): the snapshot is embedded at render time. */
+   the host. Standalone (dist/pixel-hq.html): the snapshot is embedded at render time. */
 const EMBED=window.parent!==window;
 function setStand(t){document.getElementById('stand').textContent=t}
 window.addEventListener('message',e=>{if(e.source!==window.parent)return;const m=e.data||{};
- if(m.bothqActionResult){onActionResult(m.bothqActionResult);return}
- if(m.bothqLive){LIVE=m.bothqLive;LIVE_ERR=null;liveRender();return}
- if(m.bothqLiveError){LIVE_ERR=String(m.bothqLiveError).slice(0,160);liveTab();return}
- if(m.bothqTriageResult){triagePending=false;const r=m.bothqTriageResult;pushRes(!!r.ok,r.message||r.error||'?');blk();return}
- if(m.bothq&&Array.isArray(m.bothq.bots)){DATA=m.bothq;try{renderAll();window.parent.postMessage({bothqRendered:DATA.bots.length},'*')}catch(err){setStand('render error: '+err);window.parent.postMessage({bothqRenderError:String(err)},'*')}}else if(m.bothqError){setStand('error: '+String(m.bothqError).slice(0,120))}else if(m.bothqLoading){setStand('loading …')}});
-document.getElementById('reload').onclick=()=>{if(EMBED){setStand('loading …');window.parent.postMessage({bothqReload:true},'*')}else location.reload()};
+ if(m.pixelhqActionResult){onActionResult(m.pixelhqActionResult);return}
+ if(m.pixelhqLive){LIVE=m.pixelhqLive;LIVE_ERR=null;liveRender();return}
+ if(m.pixelhqLiveError){LIVE_ERR=String(m.pixelhqLiveError).slice(0,160);liveTab();return}
+ if(m.pixelhqTriageResult){triagePending=false;const r=m.pixelhqTriageResult;pushRes(!!r.ok,r.message||r.error||'?');blk();return}
+ if(m.pixelhq&&Array.isArray(m.pixelhq.bots)){DATA=m.pixelhq;try{renderAll();window.parent.postMessage({pixelhqRendered:DATA.bots.length},'*')}catch(err){setStand('render error: '+err);window.parent.postMessage({pixelhqRenderError:String(err)},'*')}}else if(m.pixelhqError){setStand('error: '+String(m.pixelhqError).slice(0,120))}else if(m.pixelhqLoading){setStand('loading …')}});
+document.getElementById('reload').onclick=()=>{if(EMBED){setStand('loading …');window.parent.postMessage({pixelhqReload:true},'*')}else location.reload()};
 if(DATA&&DATA.live)LIVE=DATA.live;
-if(DATA)renderAll();else{setStand(EMBED?'loading …':'no data – run render.py');if(EMBED)window.parent.postMessage({bothqReady:true},'*')}
+if(DATA)renderAll();else{setStand(EMBED?'loading …':'no data – run render.py');if(EMBED)window.parent.postMessage({pixelhqReady:true},'*')}
 </script></body></html>

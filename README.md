@@ -1,8 +1,8 @@
-# Bot-HQ — a gamified HQ for your Hermes bot fleet
+# Pixel HQ — a gamified HQ for your Hermes bot fleet
 
-![Bot-HQ office view](docs/banner.png)
+![Pixel HQ office view](docs/banner.png)
 
-Bot-HQ is a [Hermes Agent](https://github.com/NousResearch/hermes-agent) desktop plugin that turns your
+Pixel HQ is a [Hermes Agent](https://github.com/NousResearch/hermes-agent) desktop plugin that turns your
 fleet of Hermes profiles into a pixel-art headquarters: every bot is a sprite at a desk, earns **XP and
 levels** from your quality reviews, keeps **HP** from its pass rate, and shows what it is doing **right
 now**. Blocked Kanban cards get a triage board with one-click actions, and your GPU/LLM serving stack
@@ -50,28 +50,28 @@ Prometheus — rendered as a game. The only writes are the Kanban actions you ex
 
 XP comes from a **quality ledger**: one JSON line per reviewed delegated answer (`agent`, `verdict`
 pass/revise/fail, `dims` correctness/completeness/format/safety 1–5, optional `parent`). If you do not keep
-one yet, Bot-HQ still works — everyone starts at level 1 and the live, Kanban and reactor views carry the
+one yet, Pixel HQ still works — everyone starts at level 1 and the live, Kanban and reactor views carry the
 page. See `docs/ledger.md` for the format.
 
 ## Install
 
 ```bash
-hermes plugins install W4-NERF/hermes-bot-hq      # or from the Hermes plugin catalog: hermes plugins install bot-hq
-hermes plugins enable bot-hq
+hermes plugins install W4-NERF/pixel-hq      # or from the Hermes plugin catalog: hermes plugins install pixel-hq
+hermes plugins enable pixel-hq
 ```
 
-Then **restart the Hermes desktop app once** (the backend routes mount at start) and open **Bot-HQ** in the
-sidebar or via ⌘K → *Open Bot-HQ*. If you run Hermes with profiles, enable the plugin in the root home
+Then **restart the Hermes desktop app once** (the backend routes mount at start) and open **Pixel HQ** in the
+sidebar or via ⌘K → *Open Pixel HQ*. If you run Hermes with profiles, enable the plugin in the root home
 (the desktop backend runs there) and in any profile that should see it:
-`hermes -p <profile> plugins enable bot-hq`.
+`hermes -p <profile> plugins enable pixel-hq`.
 
 ### Configure
 
 Site-specific settings live outside the plugin so updates never touch them:
 
 ```
-~/.hermes/plugin-data/bot-hq/config.json   # copy from bothq/config.example.json
-~/.hermes/plugin-data/bot-hq/roster.json   # copy from bothq/roster.example.json
+~/.hermes/plugin-data/pixel-hq/config.json   # copy from pixelhq/config.example.json
+~/.hermes/plugin-data/pixel-hq/roster.json   # copy from pixelhq/roster.example.json
 ```
 
 - `roster.json` — rooms, zones and one entry per bot (role, character class, colour, `leader`, `remote`).
@@ -87,8 +87,8 @@ Changes to config, roster, collector or UI apply on the next refresh — no rest
 ### Try it without a fleet
 
 ```bash
-python3 bothq/render.py --demo && xdg-open dist/bot-hq.html   # synthetic data, every view
-python3 bothq/render.py        && xdg-open dist/bot-hq.html   # your real data as a static page
+python3 pixelhq/render.py --demo && xdg-open dist/pixel-hq.html   # synthetic data, every view
+python3 pixelhq/render.py        && xdg-open dist/pixel-hq.html   # your real data as a static page
 ```
 
 ## What it reads and does (disclosure)
@@ -109,14 +109,14 @@ python3 bothq/render.py        && xdg-open dist/bot-hq.html   # your real data a
 ```
 plugin.yaml           manifest (no tools/hooks)
 __init__.py           no-op register()
-dashboard/            backend: /api/plugins/bot-hq/{snapshot,live,page,blocker/action}
-desktop/plugin.js     desktop page /bot-hq (SandboxedFrame + postMessage)
-bothq/collect.py      snapshot collector (read-only)
-bothq/live.py         "what is everyone doing" (10-s polling)
-bothq/actions.py      Kanban actions via the hermes CLI (category whitelist, audit log)
-bothq/blockers.py     blocked-card details for a triage chat
-bothq/ui.html         the whole UI, one file, no build step
-bothq/demo.py         synthetic data
+dashboard/            backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action}
+desktop/plugin.js     desktop page /pixel-hq (SandboxedFrame + postMessage)
+pixelhq/collect.py      snapshot collector (read-only)
+pixelhq/live.py         "what is everyone doing" (10-s polling)
+pixelhq/actions.py      Kanban actions via the hermes CLI (category whitelist, audit log)
+pixelhq/blockers.py     blocked-card details for a triage chat
+pixelhq/ui.html         the whole UI, one file, no build step
+pixelhq/demo.py         synthetic data
 ```
 
 ## Development
@@ -124,9 +124,9 @@ bothq/demo.py         synthetic data
 Link a checkout and the desktop app hot-reloads the UI; only `dashboard/plugin_api.py` needs an app restart:
 
 ```bash
-ln -s ~/src/hermes-bot-hq ~/.hermes/plugins/bot-hq
-hermes plugins enable bot-hq
-hermes plugins validate ~/src/hermes-bot-hq --install-deps   # the catalog check
+ln -s ~/src/pixel-hq ~/.hermes/plugins/pixel-hq
+hermes plugins enable pixel-hq
+hermes plugins validate ~/src/pixel-hq --install-deps   # the catalog check
 ```
 
 Test Kanban actions only against a dedicated sandbox board whose cards have no assignee, and list it in
@@ -135,4 +135,4 @@ Test Kanban actions only against a dedicated sandbox board whose cards have no a
 ## License
 
 MIT — see `LICENSE`. Bundled fonts IBM Plex Mono and Silkscreen are under the SIL Open Font License 1.1
-(`bothq/fonts/OFL-*.txt`).
+(`pixelhq/fonts/OFL-*.txt`).

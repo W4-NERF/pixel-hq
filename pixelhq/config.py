@@ -1,7 +1,7 @@
-"""Bot-HQ configuration: generic defaults, overridden by an optional ``config.json``.
+"""Pixel HQ configuration: generic defaults, overridden by an optional ``config.json``.
 
 Site-specific files (``config.json``, ``roster.json``) are looked up in this order:
-  1. ``$HERMES_HOME/plugin-data/bot-hq/``  (default ``~/.hermes/plugin-data/bot-hq/`` — survives plugin updates)
+  1. ``$HERMES_HOME/plugin-data/pixel-hq/``  (default ``~/.hermes/plugin-data/pixel-hq/`` — survives plugin updates)
   2. next to this file (git-ignored; handy for a linked development checkout)
 ``config.example.json`` and ``roster.example.json`` document every key. Nothing in this package
 hard-codes hosts, IPs or people.
@@ -17,8 +17,8 @@ HERE = Path(__file__).resolve().parent
 _ROOT = Path(os.path.expanduser("~/.hermes"))
 _ENV_HOME = Path(os.environ["HERMES_HOME"]) if os.environ.get("HERMES_HOME") else None
 # candidate data dirs: the active HERMES_HOME (profile or root), then the default root, then this folder
-_DIRS = [d / "plugin-data" / "bot-hq" for d in ([_ENV_HOME] if _ENV_HOME else []) + [_ROOT]] + [HERE]
-DATA_DIR = _DIRS[0] if _ENV_HOME is None else _ROOT / "plugin-data" / "bot-hq"
+_DIRS = [d / "plugin-data" / "pixel-hq" for d in ([_ENV_HOME] if _ENV_HOME else []) + [_ROOT]] + [HERE]
+DATA_DIR = _DIRS[0] if _ENV_HOME is None else _ROOT / "plugin-data" / "pixel-hq"
 
 
 def site_file(name: str) -> Path | None:
@@ -31,7 +31,7 @@ DEFAULTS: dict = {
     # Display
     "locale": "en-GB",                  # number/date formatting in the UI (BCP 47)
     "timezone": "UTC",                  # IANA zone for clocks in the UI
-    "theme_label": "BOT-HQ",
+    "theme_label": "PIXEL HQ",
     # People / roles
     "operator_name": "operator",        # shown as author of comments written from the UI
     "orchestrator_profile": "default",  # profile that writes the quality ledger, owns unattributed helper XP

@@ -1,4 +1,4 @@
-"""Bot-HQ actions on blocked Kanban cards.
+"""Pixel HQ actions on blocked Kanban cards.
 
 Writes ONLY through the official CLI (`hermes kanban --board … comment|unblock|archive`), never into the
 database. Which actions a card allows depends on its category (enforced here, not just in the UI).
@@ -31,13 +31,13 @@ LOG = HERE.parent / "var" / "actions.jsonl"
 BOARD_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 ID_RE = re.compile(r"^t_[0-9a-f]{6,16}$")
 OPERATOR = re.sub(r"[^\w .-]", "", str(CFG["operator_name"]))[:40] or "operator"
-TAG = f"[Bot-HQ · {OPERATOR}]"
+TAG = f"[Pixel HQ · {OPERATOR}]"
 
 LABEL = {"answer": "Answer & unblock", "retry": "Retry", "comment": "Comment", "archive": "Archive"}
 
 
 def _collect():
-    spec = importlib.util.spec_from_file_location("bothq_collect_actions", HERE / "collect.py")
+    spec = importlib.util.spec_from_file_location("pixelhq_collect_actions", HERE / "collect.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -105,9 +105,9 @@ def run(body: dict) -> dict:
     if action == "answer":
         cmd = base + ["unblock", "--reason", f"{TAG} {text}", tid]
     elif action == "retry":
-        cmd = base + ["unblock", "--reason", f"{TAG} retry (from Bot-HQ)", tid]
+        cmd = base + ["unblock", "--reason", f"{TAG} retry (from Pixel HQ)", tid]
     elif action == "comment":
-        cmd = base + ["comment", "--author", f"{OPERATOR} (Bot-HQ)", tid, text]
+        cmd = base + ["comment", "--author", f"{OPERATOR} (Pixel HQ)", tid, text]
     else:  # archive — never --rm
         cmd = base + ["archive", tid]
 

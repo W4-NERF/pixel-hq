@@ -2,5 +2,5 @@ dist/
 __pycache__/
 var/
 .hermes-package.json
-bothq/config.json
-bothq/roster.json
+pixelhq/config.json
+pixelhq/roster.json

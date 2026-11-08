@@ -2,7 +2,7 @@
 """Synthetic snapshot for screenshots and for trying the UI without a Hermes fleet.
 
 Deterministic (seeded) data built from roster.example.json — no real sessions, cards or people.
-``python3 render.py --demo`` embeds it into dist/bot-hq.html.
+``python3 render.py --demo`` embeds it into dist/pixel-hq.html.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ REASONS = {"you": ["Waiting for approval: switch the public DNS record to the ne
 def snapshot(seed: int = 7) -> dict:
     rnd = random.Random(seed)
     roster = json.loads((Path(__file__).with_name("roster.example.json")).read_text(encoding="utf-8"))
-    cfg = cfgmod.DEFAULTS | {"theme_label": "BOT-HQ"}
+    cfg = cfgmod.DEFAULTS | {"theme_label": "PIXEL HQ"}
     now = time.time()
     bots, events, blockers, live = [], [], [], {}
     boards = ["platform", "website", "security"]
@@ -106,7 +106,7 @@ def snapshot(seed: int = 7) -> dict:
                "engine": "vllm", "srv": {"decodeTps": 143.2, "prefillTps": 9100.0, "running": 3.0, "waiting": 0.0, "kv": 0.27,
                                          "specAccept": 0.71, "ttftP50": 0.9, "pairBroken": None, "pairStalled": None}}
     return {"generated": now, "bots": bots, "reactor": reactor, "events": events[:40], "blockers": blockers, "boardErrors": [],
-            "unassigned": {}, "cfg": cfgmod.public(cfg, roster) | {"toolsDir": "<bot-hq>/bothq"}, "collectMs": 12, "demo": True,
+            "unassigned": {}, "cfg": cfgmod.public(cfg, roster) | {"toolsDir": "<pixel-hq>/pixelhq"}, "collectMs": 12, "demo": True,
             "live": {"generated": now, "ms": 3, "bots": live, "unassignedTasks": {}}}
 
 

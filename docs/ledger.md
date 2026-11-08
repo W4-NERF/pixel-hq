@@ -1,6 +1,6 @@
 # Quality ledger format
 
-Bot-HQ reads XP, HP and attributes from a JSON-lines file (default `~/.hermes/quality/ledger.jsonl`,
+Pixel HQ reads XP, HP and attributes from a JSON-lines file (default `~/.hermes/quality/ledger.jsonl`,
 configurable via `ledger_path`). Append one object per reviewed delegated answer:
 
 ```json
@@ -18,4 +18,4 @@ configurable via `ledger_path`). Append one object per reviewed delegated answer
 | `ts` | ISO-8601; used for the event log |
 | `ref` | short topic / task id shown in the event log |
 
-Lines that do not parse are skipped. The file is never written by Bot-HQ.
+Lines that do not parse are skipped. The file is never written by Pixel HQ.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render dist/bot-hq.html — a static page with the data embedded.
+"""Render dist/pixel-hq.html — a static page with the data embedded.
 
     python3 render.py          # real data from this machine's Hermes installation
     python3 render.py --demo   # synthetic data (demo.py) — no Hermes fleet required
@@ -9,7 +9,7 @@ from pathlib import Path
 
 from page import page_html
 
-OUT = Path(__file__).resolve().parent.parent / "dist" / "bot-hq.html"
+OUT = Path(__file__).resolve().parent.parent / "dist" / "pixel-hq.html"
 
 if __name__ == "__main__":
     if "--demo" in sys.argv:

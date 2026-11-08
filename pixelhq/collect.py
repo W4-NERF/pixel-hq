@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bot-HQ collector — READ-ONLY. Builds one JSON snapshot of the fleet.
+"""Pixel HQ collector — READ-ONLY. Builds one JSON snapshot of the fleet.
 
 Sources
   - quality ledger (JSONL)          → XP / level / HP / attributes
