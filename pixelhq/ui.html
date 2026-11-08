@@ -324,7 +324,7 @@ function liveRender(){try{hud();office();liveTab()}catch(e){setStand('live rende
 function renderAll(){hud();office();board();blk();liveTab()}
 /* Embedded (desktop plugin, sandboxed iframe): data arrives via postMessage from the host, "Reload" asks
    the host. Standalone (dist/pixel-hq.html): the snapshot is embedded at render time. */
-const EMBED=window.parent!==window;
+const EMBED=window.parent!==window||/[?&]actions=1\b/.test(location.search); /* ?actions=1: show action buttons on the standalone page (demo video) */
 function setStand(t){document.getElementById('stand').textContent=t}
 window.addEventListener('message',e=>{if(e.source!==window.parent)return;const m=e.data||{};
  if(m.pixelhqActionResult){onActionResult(m.pixelhqActionResult);return}
