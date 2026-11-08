@@ -1,6 +1,8 @@
 # Pixel HQ — a gamified HQ for your Hermes bot fleet
 
-![Pixel HQ office view](docs/banner.png)
+![Pixel HQ demo](docs/demo.gif)
+
+*22-second highlight (synthetic data). Full 57-second demo: [1080p](https://github.com/W4-NERF/pixel-hq/releases/download/v1.0.0/pixel-hq-demo.mp4) · [720p](https://github.com/W4-NERF/pixel-hq/releases/download/v1.0.0/pixel-hq-demo-720p.mp4)*
 
 Pixel HQ is a [Hermes Agent](https://github.com/NousResearch/hermes-agent) desktop plugin that turns your
 fleet of Hermes profiles into a pixel-art headquarters: every bot is a sprite at a desk, earns **XP and
@@ -39,9 +41,9 @@ Prometheus — rendered as a game. The only writes are the Kanban actions you ex
 
 ## Demo video
 
-A 57-second walkthrough (synthetic data) is attached to the
-[latest release](https://github.com/W4-NERF/pixel-hq/releases/latest). It is rendered deterministically from
-the demo page — see [`docs/video/`](docs/video/README.md) to re-render it.
+The GIF above is a highlight cut; the full 57-second walkthrough (1080p and 720p, synthetic data) is attached to the
+[latest release](https://github.com/W4-NERF/pixel-hq/releases/latest). Both are rendered deterministically from
+the demo page — see [`docs/video/`](docs/video/README.md) to re-render them.
 
 ## Game rules
 
