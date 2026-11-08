@@ -1,0 +1,14 @@
+{
+  "name": "pixel-hq-demo-video",
+  "private": true,
+  "description": "Renders the Pixel HQ demo video from the standalone demo page (synthetic data) — not part of the plugin.",
+  "scripts": {
+    "page": "python3 ../../pixelhq/render.py --demo",
+    "draft": "node film.js --until=15",
+    "render": "node film.js --fps=60 --audio --out=pixel-hq-demo.mp4",
+    "render:4x5": "node film.js --format=4x5 --fps=60 --audio --out=pixel-hq-demo-4x5.mp4"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

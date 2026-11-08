@@ -37,6 +37,12 @@ Prometheus — rendered as a game. The only writes are the Kanban actions you ex
 - **Reactor** — GPU utilisation/power per node (DCGM) and serving metrics (decode/prefill tok/s, running /
   waiting requests, KV-cache, speculative-decoding acceptance, TTFT) from any vLLM-style metric family.
 
+## Demo video
+
+A 57-second walkthrough (synthetic data) is attached to the
+[latest release](https://github.com/W4-NERF/pixel-hq/releases/latest). It is rendered deterministically from
+the demo page — see [`docs/video/`](docs/video/README.md) to re-render it.
+
 ## Game rules
 
 | | |
@@ -117,6 +123,7 @@ pixelhq/actions.py      Kanban actions via the hermes CLI (category whitelist, a
 pixelhq/blockers.py     blocked-card details for a triage chat
 pixelhq/ui.html         the whole UI, one file, no build step
 pixelhq/demo.py         synthetic data
+docs/video/           demo-video renderer (Playwright + ffmpeg), not part of the plugin
 ```
 
 ## Development
