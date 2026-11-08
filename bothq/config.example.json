@@ -1,0 +1,19 @@
+{
+  "_doc": "Copy to config.json and adjust. Every key is optional; see config.py for defaults.",
+  "locale": "en-GB",
+  "timezone": "Europe/London",
+  "operator_name": "operator",
+  "orchestrator_profile": "default",
+  "hermes_home": "~/.hermes",
+  "ledger_path": "~/.hermes/quality/ledger.jsonl",
+  "exclude_boards": ["bothq-sandbox"],
+  "stale_days": 14,
+  "needs_input_keywords": ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"],
+  "xp": {"pass": 10, "revise": 3, "fail": -5},
+  "gpu": {
+    "prometheus_url": "",
+    "metrics_prefix": "vllm",
+    "node_aliases": {"gpu-node-1": "GPU1"},
+    "model_endpoint": ""
+  }
+}

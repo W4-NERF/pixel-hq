@@ -1,0 +1,25 @@
+{
+  "_doc": "Copy to roster.json and describe your fleet. Profiles missing here are added automatically to the first zone of the main room. Fields: id = Hermes profile name; cls = role; title = character class; zone = zone id from rooms; loc = where it runs (label only); color = sprite colour (#rrggbb); leader = wears the crown; remote = runs on another host (status from Kanban only).",
+  "rooms": [
+    {"id": "hq", "label": "HQ · MAIN HOST", "main": true, "zones": [
+      {"id": "command", "label": "COMMAND"},
+      {"id": "ops", "label": "OPS BOTS"},
+      {"id": "lab", "label": "DEV LAB"},
+      {"id": "quarantine", "label": "QUARANTINE · UNTRUSTED MODEL", "quarantine": true}
+    ]},
+    {"id": "outpost", "label": "OUTPOST · REMOTE HOST", "note": "remote: status from Kanban only", "zones": [
+      {"id": "remote", "label": "REMOTE"}
+    ]}
+  ],
+  "bots": [
+    {"id": "default", "cls": "Chief of Staff", "title": "Leader", "zone": "command", "loc": "main host", "color": "#7E9A52", "leader": true},
+    {"id": "sysadmin", "cls": "Linux / Docker", "title": "Smith", "zone": "ops", "loc": "main host", "color": "#5B7A99"},
+    {"id": "netadmin", "cls": "Network / Firewall", "title": "Ranger", "zone": "ops", "loc": "main host", "color": "#4E8C86"},
+    {"id": "devops", "cls": "CI/CD, Reverse Proxy", "title": "Builder", "zone": "ops", "loc": "main host", "color": "#6E8FB0"},
+    {"id": "security", "cls": "SOC, Audits", "title": "Warden", "zone": "ops", "loc": "main host", "color": "#5A86B8"},
+    {"id": "dev-a", "cls": "Coding agent", "title": "Mage", "zone": "lab", "loc": "main host", "color": "#8C7BA8"},
+    {"id": "dev-b", "cls": "Coding agent", "title": "Alchemist", "zone": "lab", "loc": "main host", "color": "#6F9AA8"},
+    {"id": "trial-model", "cls": "Model under evaluation", "title": "Stranger", "zone": "quarantine", "loc": "main host", "color": "#6B7885"},
+    {"id": "remote-ops", "cls": "Host operations", "title": "Scout", "zone": "remote", "loc": "remote host", "color": "#A8B4C0", "remote": true}
+  ]
+}

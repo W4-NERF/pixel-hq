@@ -1,0 +1,7 @@
+{
+  "name": "bot-hq",
+  "label": "Bot-HQ",
+  "description": "Gamified fleet view for Hermes Agent bots (office, character cards, live board, leaderboard, blocked-card triage).",
+  "version": "1.0.0",
+  "api": "plugin_api.py"
+}

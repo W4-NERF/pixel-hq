@@ -1,0 +1,6 @@
+dist/
+__pycache__/
+var/
+.hermes-package.json
+bothq/config.json
+bothq/roster.json

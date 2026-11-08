@@ -1,0 +1,11 @@
+name: bot-hq
+version: "1.0.0"
+manifest_version: 2
+api_version: 1
+description: "Gamified fleet view for Hermes Agent bots: a pixel office with one sprite per profile, XP/HP/levels from your quality ledger, a live 'what is every bot doing' board, a Kanban blocked-card triage with one-click actions, and a GPU/LLM reactor panel. Desktop page /bot-hq. Read-only except the Kanban actions you confirm."
+author: W4-NERF
+license: MIT
+homepage: https://github.com/W4-NERF/hermes-bot-hq
+requires_hermes: ">=0.22.2"
+kind: standalone
+tags: [desktop, fleet, kanban, dashboard, gamification]
