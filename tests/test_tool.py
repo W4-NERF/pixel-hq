@@ -180,10 +180,10 @@ def test_manifest_tool_capabilities_match_the_registration():
     import yaml
 
     manifest = yaml.safe_load((Path(__file__).resolve().parents[1] / "plugin.yaml").read_text(encoding="utf-8"))
-    assert manifest["capabilities"] == {
-        "provides_tools": [registration()["name"]], "provides_hooks": [],
-        "provides_middleware": [], "requires_env": [],
-    }
+    # Hermes reads these as top-level manifest keys (hermes plugins validate checks provides_tools).
+    assert manifest["provides_tools"] == [registration()["name"]]
+    assert manifest["provides_hooks"] == [] and manifest["provides_middleware"] == []
+    assert "capabilities" not in manifest
     assert "pixelhq_review" in manifest["description"]
 
 

@@ -9,11 +9,10 @@ homepage: https://github.com/W4-NERF/pixel-hq
 requires_hermes: ">=0.22.2"
 kind: standalone
 tags: [desktop, fleet, kanban, dashboard, gamification]
-capabilities:
-  provides_tools: [pixelhq_review]
-  provides_hooks: []
-  provides_middleware: []
-  requires_env: []
+provides_tools: [pixelhq_review]
+provides_hooks: []
+provides_middleware: []
+requires_env: []
 config_schema:
   locale:
     type: str
