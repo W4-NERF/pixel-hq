@@ -43,7 +43,7 @@ if (VISIBLE) {
 """.replace("VISIBLE", "true" if visible else "false"), actions=actions, iframe=iframe)
 
 
-def test_rate_form_confirm_cancel_defaults_polling_and_results(tmp_path):
+def test_rate_click_confirm_cancel_defaults_polling_and_results(tmp_path):
     run_ui(tmp_path, """
 const bot = DATA.bots[0];
 bot.quest = '<sample> "quest" ' + 'x'.repeat(100);
@@ -65,10 +65,14 @@ detail(bot);
 widget = elements.get('detail').querySelector('[data-review]');
 assert.equal(widget.querySelector('[data-review-ref]').value, '<edited> & "reference"');
 assert.equal(widget.querySelector('select').value, '5');
-let form = widget.querySelector('form');
-assert.equal(typeof form.onsubmit, 'function');
-form.onsubmit({preventDefault:()=>{}});
-form.onsubmit({preventDefault:()=>{}}); // duplicate submit is ignored
+const container = widget.querySelector('[data-review-form]');
+assert.equal(container.tag, 'div');
+const confirm = widget.querySelector('[data-review-confirm]');
+assert.equal(confirm.attrs.type, 'button');
+assert.equal(typeof confirm.onclick, 'function');
+confirm.onclick();
+confirm.onclick(); // duplicate click is ignored
+widget.querySelector('[data-review-confirm]').onclick(); // pending widgets cannot send again
 const sent = messages.filter(m => m.pixelhqReview);
 assert.equal(sent.length, 1);
 assert.deepEqual(sent[0].pixelhqReview, {agent:bot.id, verdict:'revise', sessionId:null,
@@ -81,15 +85,65 @@ listeners.get('message')({source:window.parent,data:{pixelhqReviewResult:{agent:
 assert.ok(widget.innerHTML.includes('res bad'));
 assert.ok(widget.innerHTML.includes('&lt;sample error&gt;'));
 assert.equal(widget.querySelector('[data-review-ref]').value, '<edited> & "reference"');
-widget.querySelector('form').onsubmit({preventDefault:()=>{}});
+widget.querySelector('[data-review-confirm]').onclick();
 listeners.get('message')({source:window.parent,data:{pixelhqReviewResult:{agent:bot.id,sessionId:null,ok:true,message:'Review saved.'}}});
 assert.ok(widget.innerHTML.includes('res ok'));
-assert.ok(!widget.querySelector('form'));
+assert.ok(!widget.querySelector('[data-review-form]'));
 widget.querySelector('[data-rate="fail"]').onclick();
 widget.querySelector('[data-review-cancel]').onclick();
-assert.ok(!widget.querySelector('form'));
+assert.ok(!widget.querySelector('[data-review-form]'));
 assert.equal(messages.filter(m => m.pixelhqReview).length, 2);
 """, iframe=True)
+
+
+@pytest.mark.parametrize("session_id", [None, "sample-session"])
+@pytest.mark.parametrize("iframe", [False, True], ids=["standalone", "hosted"])
+@pytest.mark.parametrize("verdict", ["pass", "revise", "fail"])
+def test_enter_in_review_ref_uses_confirm_payload_pending_and_results(tmp_path, session_id, iframe, verdict):
+    run_ui(tmp_path, """
+const bot = DATA.bots[0], sessionId = SESSION_ID, hosted = HOSTED, verdict = VERDICT;
+const root = document.getElementById('detail');
+root.innerHTML = reviewHtml(bot.id, sessionId, 'Sample reference'); bindReviews(root);
+let widget = root.querySelector('[data-review]');
+widget.querySelector('[data-rate="' + verdict + '"]').onclick();
+let ref = widget.querySelector('[data-review-ref]');
+ref.value = '<entered> & "reference"'; ref.oninput();
+widget.querySelectorAll('[data-review-dim]').forEach((input, index) => {
+  input.value = String([1,2,3,5][index]); input.onchange();
+});
+assert.equal(typeof ref.onkeydown, 'function');
+for (const key of ['Escape','a','Tab']) ref.onkeydown({key, preventDefault:()=>assert.fail('not Enter')});
+assert.equal(messages.filter(m => m.pixelhqReview).length, 0);
+assert.equal(reviewPending.size, 0);
+let prevented = 0;
+ref.onkeydown({key:'Enter', preventDefault:()=>{prevented++;}});
+assert.equal(prevented, 1);
+const key = reviewKey(bot.id, sessionId), sent = messages.filter(m => m.pixelhqReview);
+if (hosted) {
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].pixelhqReview, {agent:bot.id, sessionId, verdict,
+    ref:'<entered> & "reference"', dims:{correctness:1,completeness:2,format:3,safety:5}});
+  assert.ok(reviewPending.has(key));
+  assert.equal(widget.querySelector('fieldset').disabled, true);
+  assert.ok(widget.innerHTML.includes('Saving review'));
+  ref.onkeydown({key:'Enter', preventDefault:()=>{}}); // repeated key before repaint
+  widget.querySelector('[data-review-ref]').onkeydown({key:'Enter', preventDefault:()=>{}});
+  assert.equal(messages.filter(m => m.pixelhqReview).length, 1);
+  listeners.get('message')({source:window.parent,
+    data:{pixelhqReviewResult:{agent:bot.id,sessionId,ok:true,message:'Review saved.'}}});
+  assert.ok(!reviewPending.has(key));
+  assert.ok(!widget.querySelector('[data-review-form]'));
+  assert.ok(widget.innerHTML.includes('res ok'));
+} else {
+  assert.equal(sent.length, 0);
+  assert.ok(!reviewPending.has(key));
+  assert.equal(reviewResults.get(key).message, 'standalone page: no host, nothing was sent');
+  assert.equal(widget.querySelector('[data-review-ref]').value, '<entered> & "reference"');
+  assert.equal(widget.querySelector('fieldset').disabled, false);
+  assert.ok(widget.innerHTML.includes('res bad'));
+}
+""".replace("SESSION_ID", json.dumps(session_id)).replace("HOSTED", json.dumps(iframe))
+           .replace("VERDICT", json.dumps(verdict)), iframe=iframe)
 
 
 def test_live_review_keeps_session_identity_and_escapes_untrusted_fields(tmp_path):
@@ -105,7 +159,7 @@ assert.equal(widget.dataset.agent, bot.id);
 assert.equal(widget.dataset.session, session.id);
 assert.ok(!elements.get('lactive').innerHTML.includes('<sample>'));
 widget.querySelector('[data-rate="pass"]').onclick();
-widget.querySelector('form').onsubmit({preventDefault:()=>{}});
+widget.querySelector('[data-review-confirm]').onclick();
 const body = messages.find(m=>m.pixelhqReview).pixelhqReview;
 assert.equal(body.agent,bot.id);assert.equal(body.sessionId,session.id);assert.equal(body.ref,session.title);
 liveTab();

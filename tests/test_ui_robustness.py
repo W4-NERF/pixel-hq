@@ -88,7 +88,7 @@ let widget = root.querySelector('[data-review]');
 widget.querySelector('[data-rate="pass"]').onclick();
 widget.querySelector('[data-review-ref]').value = 'Sample unsent draft';
 widget.querySelector('[data-review-ref]').oninput();
-widget.querySelector('form').onsubmit({preventDefault:()=>{}});
+widget.querySelector('[data-review-confirm]').onclick();
 const key = reviewKey(bot.id, sessionId);
 assert.equal(reviewPending.has(key), false, 'no pending state may survive a standalone submit');
 assert.equal(reviewResults.get(key).ok, false);
@@ -102,7 +102,7 @@ widget = root.querySelector('[data-review]');
 assert.ok(root.innerHTML.includes('standalone page: no host, nothing was sent'));
 assert.equal(widget.querySelector('[data-review-ref]').value, 'Sample unsent draft');
 widget.querySelector('[data-review-cancel]').onclick();
-assert.ok(!widget.querySelector('form'));
+assert.ok(!widget.querySelector('[data-review-form]'));
 """.replace("SESSION_ID", json.dumps(session_id)))
 
 

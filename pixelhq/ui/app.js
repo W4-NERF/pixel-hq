@@ -51,8 +51,8 @@ const reviewDrafts=new Map(),reviewPending=new Set(),reviewResults=new Map();
 const reviewKey=(agent,sessionId)=>JSON.stringify([agent,sessionId||null]);
 function reviewBody(key){const d=reviewDrafts.get(key),pending=reviewPending.has(key),r=reviewResults.get(key);
  let h='<div class="acts"><span class="mut">Rate:</span>'+['pass','revise','fail'].map(v=>'<button type="button" data-rate="'+v+'"'+(d&&d.verdict===v?' class="on"':'')+(pending?' disabled':'')+'>'+v+'</button>').join('')+'</div>';
- if(d)h+='<form data-review-form><fieldset'+(pending?' disabled':'')+'><div class="review-dims">'+ATTR_T.map(name=>'<label>'+esc(name)+'<select data-review-dim="'+name+'">'+[1,2,3,4,5].map(v=>'<option value="'+v+'"'+(v===d.dims[name]?' selected':'')+'>'+v+'</option>').join('')+'</select></label>').join('')+'</div>'+
-  '<label class="review-ref">Ref<input data-review-ref type="text" maxlength="200" value="'+esc(d.ref)+'"></label><div class="acts"><button type="submit">Confirm</button><button type="button" data-review-cancel>Cancel</button></div></fieldset></form>';
+ if(d)h+='<div data-review-form><fieldset'+(pending?' disabled':'')+'><div class="review-dims">'+ATTR_T.map(name=>'<label>'+esc(name)+'<select data-review-dim="'+name+'">'+[1,2,3,4,5].map(v=>'<option value="'+v+'"'+(v===d.dims[name]?' selected':'')+'>'+v+'</option>').join('')+'</select></label>').join('')+'</div>'+
+  '<label class="review-ref">Ref<input data-review-ref type="text" maxlength="200" value="'+esc(d.ref)+'"></label><div class="acts"><button type="button" data-review-confirm>Confirm</button><button type="button" data-review-cancel>Cancel</button></div></fieldset></div>';
  if(pending)h+='<div class="res" role="status">Saving review …</div>';
  if(r)h+='<div class="res '+(r.ok?'ok':'bad')+'" role="status">'+esc(r.message||r.error||'No review result received.')+'</div>';
  return h}
@@ -70,10 +70,11 @@ function bindReview(el){const key=el.dataset.review;
  el.querySelectorAll('[data-review-dim]').forEach(input=>input.onchange=()=>{d.dims[input.dataset.reviewDim]=Number(input.value)});
  const ref=el.querySelector('[data-review-ref]');ref.oninput=()=>{d.ref=ref.value.slice(0,200)};
  el.querySelector('[data-review-cancel]').onclick=()=>{if(reviewPending.has(key))return;reviewDrafts.delete(key);reviewResults.delete(key);refreshReview(el)};
- form.onsubmit=e=>{e.preventDefault();if(reviewPending.has(key))return;
+ const confirm=el.querySelector('[data-review-confirm]');confirm.onclick=()=>{if(reviewPending.has(key))return;
   const body={agent:d.agent,verdict:d.verdict,dims:{...d.dims},ref:d.ref,sessionId:d.sessionId};
   reviewPending.add(key);reviewResults.delete(key);refreshReview(el);
-  submitToHost({pixelhqReview:body},r=>onReviewResult({...r,agent:body.agent,sessionId:body.sessionId}))}}
+  submitToHost({pixelhqReview:body},r=>onReviewResult({...r,agent:body.agent,sessionId:body.sessionId}))};
+ ref.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();confirm.onclick()}}}
 function bindReviews(root){root.querySelectorAll('[data-review]').forEach(bindReview)}
 function onReviewResult(r){const key=reviewKey(r.agent,r.sessionId);if(!reviewPending.has(key))return;
  reviewPending.delete(key);reviewResults.set(key,r);if(r.ok)reviewDrafts.delete(key);
