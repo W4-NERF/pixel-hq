@@ -1,4 +1,4 @@
-"""Build the Pixel HQ page: ui.html + self-hosted fonts (base64) + optionally embedded data.
+"""Build the Pixel HQ page: ui/ markup, CSS and JS + fonts + optionally embedded data.
 
 Fonts: IBM Plex Mono and Silkscreen, both SIL OFL 1.1 (latin subset, licences in fonts/) — embedded so
 the page looks identical inside the desktop app's sandboxed iframe without network or CSP exceptions.
@@ -29,7 +29,10 @@ def font_faces() -> str:
 
 
 def page_html(data: dict | None = None) -> str:
-    html = (HERE / "ui.html").read_text(encoding="utf-8")
+    ui = HERE / "ui"
+    html = (ui / "index.html").read_text(encoding="utf-8")
+    html = html.replace("/*PIXELHQ_CSS*/", (ui / "style.css").read_text(encoding="utf-8"), 1)
+    html = html.replace("/*PIXELHQ_JS*/", (ui / "app.js").read_text(encoding="utf-8"), 1)
     html = html.replace(IMPORT_LINE, font_faces(), 1)
     if data is not None:
         blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")  # no </script> break-out

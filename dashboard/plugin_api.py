@@ -1,9 +1,11 @@
-"""Pixel HQ backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action}.
+"""Pixel HQ backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action,review}.
 
 Collector and UI live in ``<repo>/pixelhq``; the plugin folder is usually a symlink into the repo, hence
-``resolve()``. Modules are re-imported per request so config/roster/rule changes apply without a restart
-(only this file needs a desktop-app restart). The snapshot is cached (default 30 s) so several windows
-or refreshes do not run the ~3 s collector in parallel.
+``resolve()``. Only entry modules explicitly loaded via ``_load()`` are re-executed on each endpoint call
+(or snapshot cache miss). Sibling imports stay cached in ``sys.modules``; edits to them or this file
+require an app restart. Config and roster data are read inside each collector/live/review/action
+invocation, not at import time. Snapshots are cached (default 30 s), so data edits appear on the next
+cache miss or invalidation; the live endpoint is uncached.
 """
 from __future__ import annotations
 
@@ -56,4 +58,21 @@ async def blocker_action(body: dict):
     result = await asyncio.to_thread(_load("pixelhq_actions", "actions.py").run, body or {})
     if result.get("ok"):
         _cache["data"] = None  # next snapshot is fresh
+    return result
+
+
+def _append_review(body: dict) -> dict:
+    collect = _load("pixelhq_collect", "collect.py")
+    cfg, roster = collect.context()
+    known = {bot["id"] for bot in collect.roster_bots(collect.read_profiles(cfg=cfg), roster=roster, cfg=cfg)}
+    return _load("pixelhq_reviews", "reviews.py").append(body, cfg, known)
+
+
+@router.post("/review")
+async def review(body: dict):
+    """Write only to the review JSONL, then invalidate even an in-flight snapshot."""
+    async with _lock:
+        result = await asyncio.to_thread(_append_review, body)
+        if result.get("ok"):
+            _cache["data"] = None
     return result

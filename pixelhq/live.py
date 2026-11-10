@@ -7,42 +7,38 @@ here and rendered as text only by the UI.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import config as cfgmod  # noqa: E402
+if __package__:
+    from . import config as cfgmod, dbutil, profiles
+    from .collect import roster_bots
+    from .common import boards, clip, state_db
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import config as cfgmod
+    import dbutil
+    import profiles
+    from collect import roster_bots
+    from common import boards, clip, state_db
 
-CFG = cfgmod.load()
-HERMES = Path(CFG["hermes_home"])
-BOARDS = HERMES / "kanban" / "boards"
-EXCLUDE_BOARDS = set(CFG["exclude_boards"])
 ACTIVE_S = 10 * 60      # a session counts as active if something happened in the last 10 min
 STALE_STEP_S = 5 * 60   # a "running …" step without progress for > 5 min → flagged
 ARG_KEYS = ("command", "path", "url", "query", "pattern", "text", "goal", "name", "message", "key", "task_id")
 
 
-def clip(s, n: int) -> str:
-    s = " ".join(str(s or "").split())
-    return s if len(s) <= n else s[: n - 1].rstrip() + "…"
-
-
-def ro(path: Path) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=1.5)
-
-
-def state_db(bot: str) -> Path:
-    return HERMES / "state.db" if bot == "default" else HERMES / "profiles" / bot / "state.db"
-
-
-def last_tool(con: sqlite3.Connection, sid: str) -> dict | None:
-    row = con.execute("select tool_calls, timestamp from messages where session_id=? and role='assistant' "
-                      "and tool_calls is not null order by timestamp desc limit 1", (sid,)).fetchone()
-    if not row:
+def last_tool(con: sqlite3.Connection, sid: str, warnings: list[str] | None = None, source: str = "messages") -> dict | None:
+    warnings = warnings if warnings is not None else []
+    rows = dbutil.rows(con, "messages", ["tool_calls", "timestamp", "session_id", "role"],
+                       "session_id=? AND role='assistant' AND tool_calls IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
+                       (sid,), warnings=warnings, source=source)
+    if not rows:
         return None
+    row = rows[0]
     try:
         calls = json.loads(row[0])
         fn = (calls[0].get("function") or {}) if calls else {}
@@ -50,6 +46,7 @@ def last_tool(con: sqlite3.Connection, sid: str) -> dict | None:
         try:
             args = json.loads(fn.get("arguments") or "{}")
         except Exception:
+            dbutil.warning(warnings, f"{source}/messages", "invalid tool arguments")
             args = {}
         arg = ""
         if isinstance(args, dict):
@@ -59,78 +56,95 @@ def last_tool(con: sqlite3.Connection, sid: str) -> dict | None:
                     break
             if not arg:
                 arg = next((v for v in args.values() if isinstance(v, str) and v.strip()), "")
-        return {"name": name, "arg": clip(arg, 160), "ts": float(row[1]), "n": len(calls)}
-    except Exception:
+        return {"name": name, "arg": clip(arg, 160, collapse_whitespace=True),
+                "ts": float(row[1]) if row[1] is not None else None, "n": len(calls)}
+    except Exception as exc:
+        dbutil.warning(warnings, f"{source}/messages", exc)
         return None
 
 
-def read_sessions(bot: str, now: float) -> dict:
-    db = state_db(bot)
-    out = {"active": [], "last": None, "error": None}
+def read_sessions(bot: str, now: float, cfg: dict | None = None) -> dict:
+    cfg = cfgmod.load() if cfg is None else cfg
+    db = state_db(bot, cfg)
+    out = {"active": [], "last": None, "error": None, "warnings": []}
     if not db.exists():
         return out
     try:
-        con = ro(db)
-        rows = con.execute(
-            "select id, title, source, started_at, coalesce(last_activity_at, started_at) as la, "
-            "last_activity_description, parent_session_id, input_tokens, output_tokens, estimated_cost_usd, "
-            "message_count, tool_call_count, model from sessions where ended_at is null and "
-            "coalesce(last_activity_at, started_at) > ? order by la desc limit 12", (now - ACTIVE_S,)).fetchall()
-        for r in rows:
-            sid, title, source, started, la, desc, parent, itok, otok, cost, mc, tc, model = r
-            tool = last_tool(con, sid)
-            step = clip(desc or "", 120)
-            out["active"].append({
-                "id": sid, "title": clip(title or "(untitled)", 140), "source": source or "?",
-                "startedAt": float(started or la), "lastAt": float(la), "step": step,
-                "stale": bool(step and "running" in step and now - float(la) > STALE_STEP_S),
-                "parent": parent, "tool": tool, "inTok": itok or 0, "outTok": otok or 0,
-                "cost": round(float(cost), 3) if cost else None, "msgs": mc or 0, "toolCalls": tc or 0,
-                "model": clip(model or "", 40)})
-        last = con.execute("select coalesce(last_activity_at, started_at), title, last_activity_description, source "
-                           "from sessions where source != 'subagent' order by 1 desc limit 1").fetchone()
-        if last:
-            out["last"] = {"at": float(last[0]), "title": clip(last[1] or "", 70), "step": clip(last[2] or "", 80),
-                           "source": last[3]}
-        for x in out["active"]:
-            x["isSub"] = x["source"] == "subagent" or bool(x.get("parent")) or x["title"].startswith("Subagent:")
-        con.close()
+        with contextlib.closing(dbutil.ro(db)) as con:
+            rows = dbutil.rows(
+                con, "sessions", ["id", "title", "source", "started_at", "last_activity_at",
+                                  "last_activity_description", "parent_session_id", "input_tokens", "output_tokens",
+                                  "estimated_cost_usd", "message_count", "tool_call_count", "model", "ended_at"],
+                "ended_at IS NULL AND coalesce(last_activity_at, started_at) > ? "
+                "ORDER BY coalesce(last_activity_at, started_at) DESC LIMIT 12", (now - ACTIVE_S,),
+                warnings=out["warnings"], source=bot)
+            for row in rows:
+                sid, title, source, started, last_at, desc, parent, itok, otok, cost, mc, tc, model, ended = row
+                la = last_at or started
+                tool = last_tool(con, sid, out["warnings"], bot)
+                step = clip(desc or "", 120, collapse_whitespace=True)
+                out["active"].append({
+                    "id": sid, "title": clip(title or "(untitled)", 140, collapse_whitespace=True), "source": source or "?",
+                    "startedAt": float(started or la), "lastAt": float(la), "step": step,
+                    "stale": bool(step and "running" in step and now - float(la) > STALE_STEP_S),
+                    "parent": parent, "tool": tool, "inTok": itok or 0, "outTok": otok or 0,
+                    "cost": round(float(cost), 3) if cost else None, "msgs": mc or 0, "toolCalls": tc or 0,
+                    "model": clip(model or "", 40, collapse_whitespace=True)})
+            last_rows = dbutil.rows(con, "sessions", ["last_activity_at", "started_at", "title",
+                                                     "last_activity_description", "source"],
+                                    "coalesce(source, '') != 'subagent' "
+                                    "ORDER BY coalesce(last_activity_at, started_at) DESC LIMIT 1",
+                                    warnings=out["warnings"], source=bot)
+        if last_rows:
+            last = last_rows[0]
+            at = last[0] or last[1]
+            out["last"] = {"at": float(at) if at is not None else None,
+                           "title": clip(last[2], 70, collapse_whitespace=True),
+                           "step": clip(last[3], 80, collapse_whitespace=True), "source": last[4]}
+        for session in out["active"]:
+            session["isSub"] = (session["source"] == "subagent" or bool(session.get("parent"))
+                                or session["title"].startswith("Subagent:"))
     except Exception as exc:
-        out["error"] = clip(str(exc), 100)
+        out["error"] = clip(str(exc), 100, collapse_whitespace=True)
     return out
 
 
-def read_running_tasks(now: float) -> dict:
+def read_running_tasks(now: float, warnings: list[str] | None = None, cfg: dict | None = None) -> dict:
+    cfg = cfgmod.load() if cfg is None else cfg
+    warnings = warnings if warnings is not None else []
     tasks: dict[str, list] = {}
-    for bdir in sorted(BOARDS.glob("*/")):
-        db = bdir / "kanban.db"
-        if not db.exists() or bdir.name in EXCLUDE_BOARDS:
-            continue
+    for board, db in boards(cfg):
         try:
-            con = ro(db)
-            for tid, title, assignee, started, hb, pid in con.execute(
-                    "select id, title, assignee, started_at, last_heartbeat_at, worker_pid from tasks "
-                    "where status='running'"):
+            with contextlib.closing(dbutil.ro(db)) as con:
+                rows = dbutil.rows(con, "tasks", ["id", "title", "assignee", "started_at", "last_heartbeat_at",
+                                                   "worker_pid", "status"], "status='running'",
+                                   warnings=warnings, source=board)
+            for tid, title, assignee, started, hb, pid, status in rows:
                 tasks.setdefault(assignee or "?", []).append({
-                    "board": bdir.name, "id": tid, "title": clip(title, 90),
+                    "board": board, "id": tid, "title": clip(title, 90, collapse_whitespace=True),
                     "startedAt": float(started) if started else None,
                     "heartbeatAt": float(hb) if hb else None,
                     "heartbeatAge": int(now - float(hb)) if hb else None, "pid": pid})
-            con.close()
-        except Exception:
-            continue
+        except Exception as exc:
+            dbutil.warning(warnings, board, exc)
     return tasks
 
 
 def query(params: dict | None = None) -> dict:
     t0 = time.time()
     now = time.time()
-    roster = cfgmod.load_roster()["bots"]
-    tasks = read_running_tasks(now)
+    cfg, roster_data = cfgmod.load(), cfgmod.load_roster()
+    warnings = list(cfg.get("warnings", [])) + roster_data.get("warnings", [])
+    roster = roster_bots(profiles.list_profiles(Path(cfg["hermes_home"]), warnings), warnings,
+                         roster=roster_data, cfg=cfg)
+    tasks = read_running_tasks(now, warnings, cfg)
     bots = {}
     for r in roster:
         bid = r["id"]
-        s = {"active": [], "last": None, "error": None} if r.get("remote") else read_sessions(bid, now)
+        s = {"active": [], "last": None, "error": None} if r.get("remote") else read_sessions(bid, now, cfg)
+        warnings.extend(s.get("warnings", []))
+        if s["error"]:
+            dbutil.warning(warnings, bid, s["error"])
         # nest sub-agents under their parent session (parent_session_id set or title "Subagent: …";
         # newer Hermes versions record them with the parent's source instead of source=subagent)
         is_sub = lambda x: x["source"] == "subagent" or bool(x.get("parent")) or x["title"].startswith("Subagent:")
@@ -143,10 +157,10 @@ def query(params: dict | None = None) -> dict:
             (p.setdefault("children", []) if p else orphans).append(sub)
         mains.extend(orphans)
         bt = tasks.get(bid, [])
-        active = bool(mains) or any(t["heartbeatAge"] is not None and t["heartbeatAge"] < ACTIVE_S for t in bt)
+        active = bool(mains) or bool(bt)
         bots[bid] = {"active": active, "sessions": mains[:8], "tasks": bt, "last": s["last"], "error": s["error"],
                      "remote": bool(r.get("remote"))}
-    return {"generated": now, "ms": round(1000 * (time.time() - t0)), "bots": bots,
+    return {"generated": now, "ms": round(1000 * (time.time() - t0)), "bots": bots, "warnings": warnings,
             "unassignedTasks": {k: v for k, v in tasks.items() if k not in bots}}
 
 

@@ -12,9 +12,15 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import config as cfgmod  # noqa: E402
-from collect import ALLOWED, achievements, level_of  # noqa: E402
+if __package__:
+    from . import config as cfgmod
+    from .collect import ALLOWED, achievements
+    from .scoring import level_of
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import config as cfgmod
+    from collect import ALLOWED, achievements
+    from scoring import level_of
 
 QUESTS = ["Rotate TLS certificates on the edge proxy", "Nightly backup verification report",
           "Upgrade the reverse proxy to the current release", "Review firewall policy drift",
@@ -46,9 +52,14 @@ def snapshot(seed: int = 7) -> dict:
     for i, r in enumerate(roster["bots"]):
         p, rv, f = rnd.randint(0, 60), rnd.randint(0, 6), rnd.randint(0, 2)
         summ = (rnd.randint(50, 300), rnd.randint(0, 8), rnd.randint(0, 3)) if r.get("leader") else (0, 0, 0)
-        xp_own = max(0, 10 * p + 3 * rv - 5 * f)
-        xp_sum = max(0, 10 * summ[0] + 3 * summ[1] - 5 * summ[2])
+        xp_own = max(0, cfg["xp_pass"] * p + cfg["xp_revise"] * rv + cfg["xp_fail"] * f)
+        xp_sum = max(0, cfg["xp_pass"] * summ[0] + cfg["xp_revise"] * summ[1] + cfg["xp_fail"] * summ[2])
         xp = xp_own + xp_sum
+        kanban_pass = p // 2
+        by_source = {
+            "kanban": {"pass": kanban_pass, "revise": 0, "fail": 0},
+            "reviews": {"pass": p - kanban_pass + summ[0], "revise": rv + summ[1], "fail": f + summ[2]},
+        }
         lvl, pct = level_of(xp)
         tot = p + rv + f + sum(summ)
         status = rnd.choice(["running", "idle", "idle", "blocked"]) if not r.get("remote") else rnd.choice(["idle", "blocked"])
@@ -61,6 +72,9 @@ def snapshot(seed: int = 7) -> dict:
         b = dict(r, model=rnd.choice(["local/llm-34b", "vendor/model-large", "vendor/model-small"]), gateway="running",
                  status=status, quest=quests[0]["title"] if quests else "", quests=quests, openQuests=len(quests),
                  blocked=nblk, xp=xp, xpOwn=xp_own, xpSummon=xp_sum, lvl=lvl, xpPct=pct,
+                 xpBySource={source: sum(counts[v] * cfg["xp_" + v] for v in ("pass", "revise", "fail"))
+                             for source, counts in by_source.items()},
+                 bySource=by_source, selfReviews=0, attrsSource="reviews",
                  hp=round(100 * (p + summ[0]) / tot) if tot else None, p=p + summ[0], r=rv + summ[1], f=f + summ[2], n=tot,
                  own=[p, rv, f], summ=list(summ), summons=sum(summ), subSessions=summ[0] // 3,
                  sessions7d=rnd.randint(2, 40), attrs=[round(rnd.uniform(3.6, 4.9), 1) for _ in range(4)],
@@ -78,8 +92,9 @@ def snapshot(seed: int = 7) -> dict:
                                  "openParents": [{"id": f"t_{rnd.randrange(16**8):08x}", "title": rnd.choice(QUESTS), "status": "blocked"}] if cat == "upstream" else [],
                                  "actions": ALLOWED[cat], "remote": bool(r.get("remote"))})
         for _ in range(rnd.randint(1, 3)):
-            kind = rnd.choice(["qc-pass", "qc-pass", "qc-pass", "qc-revise", "completed", "created", "blocked"])
+            kind = rnd.choice(["qc-pass", "qc-pass", "qc-pass", "qc-revise", "completed", "created", "blocked", "changes_requested"])
             events.append({"ts": now - rnd.randint(300, 6 * 86400), "bot": r["id"], "kind": kind, "summon": kind.startswith("qc") and bool(r.get("leader")) and rnd.random() < .6,
+                           "source": "ui" if kind.startswith("qc") else "kanban", "selfReview": False,
                            "text": rnd.choice(QUESTS) + (f" [{rnd.choice(boards)}/t_{rnd.randrange(16**8):08x}]" if not kind.startswith("qc") else "")})
         sessions = []
         if status == "running":
@@ -102,12 +117,16 @@ def snapshot(seed: int = 7) -> dict:
     events.sort(key=lambda e: e["ts"], reverse=True)
     order = {"you": 0, "technical": 1, "stale": 2, "unknown": 3, "upstream": 4}
     blockers.sort(key=lambda x: (order[x["cat"]], -x["ageDays"]))
-    reactor = {"nodes": [{"id": "GPU1", "util": 91, "power": 310}, {"id": "GPU2", "util": 88, "power": 298}], "model": "example/llm-34b-instruct",
-               "engine": "vllm", "srv": {"decodeTps": 143.2, "prefillTps": 9100.0, "running": 3.0, "waiting": 0.0, "kv": 0.27,
-                                         "specAccept": 0.71, "ttftP50": 0.9, "pairBroken": None, "pairStalled": None}}
-    return {"generated": now, "bots": bots, "reactor": reactor, "events": events[:40], "blockers": blockers, "boardErrors": [],
+    reactor = _reactor()
+    return {"generated": now, "bots": bots, "reactor": reactor, "events": events[:40], "blockers": blockers, "boardErrors": [], "warnings": [],
             "unassigned": {}, "cfg": cfgmod.public(cfg, roster) | {"toolsDir": "<pixel-hq>/pixelhq"}, "collectMs": 12, "demo": True,
             "live": {"generated": now, "ms": 3, "bots": live, "unassignedTasks": {}}}
+
+
+def _reactor() -> dict:
+    return {"nodes": [{"id": "GPU1", "util": 91, "power": 310}, {"id": "GPU2", "util": 88, "power": 298}], "model": "example/llm-34b-instruct",
+            "engine": "vllm", "srv": {"decodeTps": 143.2, "prefillTps": 9100.0, "running": 3.0, "waiting": 0.0, "kv": 0.27,
+                                      "specAccept": 0.71, "ttftP50": 0.9, "pairBroken": None, "pairStalled": None}}
 
 
 if __name__ == "__main__":

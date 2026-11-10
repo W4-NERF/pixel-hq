@@ -1,4 +1,4 @@
-"""Pixel HQ configuration: generic defaults, overridden by an optional ``config.json``.
+"""Pixel HQ settings: defaults < optional ``config.json`` < Hermes plugin settings.
 
 Site-specific files (``config.json``, ``roster.json``) are looked up in this order:
   1. ``$HERMES_HOME/plugin-data/pixel-hq/``  (default ``~/.hermes/plugin-data/pixel-hq/`` — survives plugin updates)
@@ -13,16 +13,25 @@ import json
 import os
 from pathlib import Path
 
+try:
+    from hermes_cli.config import load_config_readonly
+except ImportError:
+    def load_config_readonly() -> dict:
+        return {}
+
 HERE = Path(__file__).resolve().parent
-_ROOT = Path(os.path.expanduser("~/.hermes"))
-_ENV_HOME = Path(os.environ["HERMES_HOME"]) if os.environ.get("HERMES_HOME") else None
-# candidate data dirs: the active HERMES_HOME (profile or root), then the default root, then this folder
-_DIRS = [d / "plugin-data" / "pixel-hq" for d in ([_ENV_HOME] if _ENV_HOME else []) + [_ROOT]] + [HERE]
-DATA_DIR = _DIRS[0] if _ENV_HOME is None else _ROOT / "plugin-data" / "pixel-hq"
+
+
+def root_home() -> Path:
+    home = Path(os.environ.get("HERMES_HOME") or "~/.hermes").expanduser()
+    return home.parent.parent if home.parent.name == "profiles" else home
+
+
+_DIRS: list[Path] | None = None  # optional explicit lookup override for standalone callers
 
 
 def site_file(name: str) -> Path | None:
-    for d in _DIRS:
+    for d in (_DIRS if _DIRS is not None else [root_home() / "plugin-data" / "pixel-hq", HERE]):
         if (d / name).exists():
             return d / name
     return None
@@ -34,60 +43,159 @@ DEFAULTS: dict = {
     "theme_label": "PIXEL HQ",
     # People / roles
     "operator_name": "operator",        # shown as author of comments written from the UI
-    "orchestrator_profile": "default",  # profile that writes the quality ledger, owns unattributed helper XP
-                                        # and receives triage runs
+    "orchestrator_profile": "default",  # owns unattributed helper XP and receives triage runs
     # Paths (``~`` allowed)
-    "hermes_home": "~/.hermes",
-    "ledger_path": "~/.hermes/quality/ledger.jsonl",
+    "reviews_path": "",                 # empty resolves to <root>/plugin-data/pixel-hq/reviews.jsonl
+    "legacy_ledger_path": "",           # optional, read-only older ledger
     # Kanban
+    "kanban_xp": True,
     "exclude_boards": [],               # board slugs hidden from every view (e.g. a sandbox board)
     "stale_days": 14,
     # Blocked cards whose title/reason contains one of these words are filed under "waiting for you"
     "needs_input_keywords": ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"],
     # Gamification
-    "xp": {"pass": 10, "revise": 3, "fail": -5},
+    "xp_pass": 10, "xp_revise": 3, "xp_fail": -5,
     # GPU / LLM serving ("reactor"). Leave prometheus_url empty to hide the reactor.
-    "gpu": {
-        "prometheus_url": "",           # e.g. http://prometheus.example:9090
-        "metrics_prefix": "vllm",       # metric family prefix: vllm | tensorfold | sglang
-        "node_aliases": {},             # {"prometheus instance label": "display name"}
-        "model_endpoint": "",           # OpenAI-compatible base, e.g. http://llm.example:8000 → /v1/models
-    },
+    "prometheus_url": "", "metrics_prefix": "vllm", "node_aliases": {}, "model_endpoint": "",
 }
 
 
-def _merge(base: dict, over: dict) -> dict:
-    out = copy.deepcopy(base)
-    for k, v in (over or {}).items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = _merge(out[k], v)
-        else:
-            out[k] = v
+def _flat_settings(settings: dict) -> dict:
+    """Map legacy nested settings; an explicit flat key wins within the same file."""
+    if not isinstance(settings, dict):
+        raise ValueError("expected a settings object")
+    out = copy.deepcopy(settings)
+    for group, mapping in (
+        ("xp", {key: "xp_" + key for key in ("pass", "revise", "fail")}),
+        ("gpu", {key: key for key in ("prometheus_url", "metrics_prefix", "node_aliases", "model_endpoint")}),
+    ):
+        nested = out.pop(group, None)
+        if isinstance(nested, dict):
+            for key, flat in mapping.items():
+                if key in nested:
+                    out.setdefault(flat, nested[key])
+    if "ledger_path" in out:
+        out.setdefault("legacy_ledger_path", out.pop("ledger_path"))
     return out
+
+
+def _coerce(value, expected: type):
+    """Coerce scalar settings without truthiness traps or unsafe list members."""
+    if expected is bool:
+        if isinstance(value, str):
+            value = value.strip().lower()
+            if value in ("true", "yes", "on", "1"):
+                return True
+            if value in ("false", "no", "off", "0"):
+                return False
+        elif type(value) in (bool, int) and value in (0, 1):
+            return bool(value)
+    elif expected is int:
+        if type(value) in (str, int, float) and not isinstance(value, bool):
+            number = int(value)
+            if not isinstance(value, float) or number == value:
+                return number
+    elif expected is list:
+        value = [value] if isinstance(value, str) else value
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            return list(value)
+    elif expected is dict:
+        value = json.loads(value) if isinstance(value, str) else value
+        if isinstance(value, dict):
+            return copy.deepcopy(value)
+    elif expected is str and type(value) in (str, int, float, bool):
+        return str(value)
+    raise ValueError("invalid setting type")
+
+
+def _normalise(cfg: dict) -> None:
+    """A malformed key cannot invalidate its readable siblings or the whole page."""
+    cfg["warnings"] = []
+    for key, default in DEFAULTS.items():
+        try:
+            cfg[key] = _coerce(cfg[key], type(default))
+        except (TypeError, ValueError, OverflowError, RecursionError):
+            cfg[key] = copy.deepcopy(default)
+            message = f"{key}: expected {type(default).__name__}"
+            cfg["warnings"].append(message)
+            cfg.setdefault("config_error", message)
 
 
 def load() -> dict:
     cfg = copy.deepcopy(DEFAULTS)
+    cfg["hermes_home"] = str(root_home())
+    cfg["settings_source"] = "defaults"
     p = site_file("config.json")
     if p:
         try:
-            cfg = _merge(cfg, json.loads(p.read_text(encoding="utf-8")))
+            cfg.update(_flat_settings(json.loads(p.read_text(encoding="utf-8"))))
+            cfg["settings_source"] = "file"
         except Exception as exc:  # a broken config must not take the whole page down
             cfg["config_error"] = f"config.json: {str(exc)[:120]}"
+    try:
+        settings = load_config_readonly()
+        for key in ("plugins", "entries", "pixel-hq", "settings"):
+            settings = settings.get(key, {}) if isinstance(settings, dict) else {}
+        if isinstance(settings, dict) and settings:
+            cfg.update(_flat_settings(settings))
+            cfg["settings_source"] = "hermes"
+    except Exception as exc:
+        # Loader errors may include private YAML contents; expose only the exception type.
+        cfg.setdefault("config_error", f"Hermes settings: {type(exc).__name__}")
+    _normalise(cfg)
     cfg["hermes_home"] = os.path.expanduser(cfg["hermes_home"])
-    cfg["ledger_path"] = os.path.expanduser(cfg["ledger_path"])
+    for key in ("reviews_path", "legacy_ledger_path"):
+        cfg[key] = ledger_path(cfg, key)
     return cfg
 
 
-def roster_path() -> Path:
-    return site_file("roster.json") or HERE / "roster.example.json"
+def ledger_path(cfg: dict, key: str = "reviews_path") -> str:
+    """Relative ledgers belong to plugin-data, not the server's working directory."""
+    value = cfg.get(key) or ("reviews.jsonl" if key == "reviews_path" else "")
+    if not value:
+        return ""
+    path = Path(os.path.expanduser(value))
+    if not path.is_absolute():
+        path = Path(cfg["hermes_home"]) / "plugin-data" / "pixel-hq" / path
+        path = path.resolve()
+    return str(path)
+
+
+def roster_path() -> Path | None:
+    return site_file("roster.json")
+
+
+def _generated_roster(warnings: list[str]) -> dict:
+    return {"rooms": [{"id": "hq", "label": "HEADQUARTERS", "main": True,
+                       "zones": [{"id": "command", "label": "COMMAND"},
+                                 {"id": "crew", "label": "CREW"}]}],
+            "bots": [], "rosterSource": "generated", "warnings": warnings}
 
 
 def load_roster() -> dict:
-    data = json.loads(roster_path().read_text(encoding="utf-8"))
-    data.setdefault("rooms", [])
-    data.setdefault("bots", [])
-    return data
+    warnings = []
+    try:
+        path = roster_path()
+        if path is None:
+            return _generated_roster(warnings)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("expected a roster object")
+        for key in ("rooms", "bots"):
+            if not isinstance(data.setdefault(key, []), list):
+                raise ValueError(f"expected a {key} list")
+        bots = []
+        for index, bot in enumerate(data["bots"]):
+            if not isinstance(bot, dict) or not isinstance(bot.get("id"), str) or not bot["id"]:
+                warnings.append(f"roster.json: bots[{index}]: expected a string id")
+                continue
+            bots.append(bot)
+        data.update(bots=bots, rosterSource="file", warnings=warnings)
+        return data
+    except (OSError, ValueError, RecursionError) as exc:
+        # JSON/OS diagnostics can quote arbitrary private content or paths.
+        warnings.append(f"roster.json: invalid or unreadable roster ({type(exc).__name__})")
+        return _generated_roster(warnings)
 
 
 def public(cfg: dict, roster: dict) -> dict:
@@ -95,8 +203,11 @@ def public(cfg: dict, roster: dict) -> dict:
     return {
         "locale": cfg["locale"], "timezone": cfg["timezone"], "label": cfg["theme_label"],
         "operator": cfg["operator_name"], "orchestrator": cfg["orchestrator_profile"],
-        "xp": cfg["xp"], "staleDays": cfg["stale_days"], "toolsDir": str(HERE),
+        "xp": {verdict: cfg["xp_" + verdict] for verdict in ("pass", "revise", "fail")},
+        "staleDays": cfg["stale_days"], "toolsDir": str(HERE),
         "remoteBots": [b["id"] for b in roster["bots"] if b.get("remote")],
         "rooms": roster["rooms"], "configError": cfg.get("config_error"),
-        "configDir": str(DATA_DIR), "usingExampleRoster": roster_path().name == "roster.example.json",
+        "configDir": str(Path(cfg.get("hermes_home") or root_home()) / "plugin-data" / "pixel-hq"), "usingExampleRoster": False,
+        "rosterSource": roster.get("rosterSource", "file"),
+        "settingsSource": cfg.get("settings_source", "defaults"),
     }

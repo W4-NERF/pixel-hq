@@ -11,7 +11,7 @@ now**. Blocked Kanban cards get a triage board with one-click actions, and your 
 shows up as the **reactor**.
 
 It is a read-only mirror of data Hermes already has — sessions, the Kanban boards, a quality ledger,
-Prometheus — rendered as a game. The only writes are the Kanban actions you explicitly confirm.
+Prometheus — rendered as a game. Writes require your explicit Kanban action or review confirmation.
 
 ## Views
 
@@ -75,22 +75,46 @@ sidebar or via ⌘K → *Open Pixel HQ*. If you run Hermes with profiles, enable
 
 ### Configure
 
-Site-specific settings live outside the plugin so updates never touch them:
+Open **Settings → Plugins → Pixel HQ** in the Hermes Desktop app. The form exposes all 18 optional
+settings declared in `plugin.yaml`; Hermes saves them under `plugins.entries.pixel-hq.settings` in its
+`config.yaml`, outside the plugin so updates never overwrite them.
+
+For headless setups, copy `pixelhq/config.example.json` to the optional `config.json` below and adjust
+only the keys you need. The roster remains a separate, unchanged JSON file:
 
 ```
-~/.hermes/plugin-data/pixel-hq/config.json   # copy from pixelhq/config.example.json
+~/.hermes/plugin-data/pixel-hq/config.json   # optional headless settings
 ~/.hermes/plugin-data/pixel-hq/roster.json   # copy from pixelhq/roster.example.json
 ```
 
+These paths are relative to the root Hermes home; a custom `HERMES_HOME` is respected, including when
+it points to a profile under `profiles/`. A linked development checkout can also keep these files next
+to `pixelhq/config.py` as a fallback.
+
+Settings are applied in this order: **defaults < config.json < Hermes plugin settings**. Each explicitly
+saved Hermes key replaces the file value, including `false`, `0`, empty strings, lists and dictionaries.
+The snapshot's `cfg.settingsSource` reports `hermes` when non-empty Hermes settings are applied, otherwise
+`file` for a successfully read settings file or `defaults` when neither source is available. Invalid JSON
+falls back to defaults (still overridden by Hermes) and is reported as `cfg.configError`.
+
+- Display and roles: `locale`, `timezone`, `theme_label`, `operator_name` (author of UI comments and
+  reviews), and `orchestrator_profile` (receives unattributed helper XP and triage runs).
+- Reviews and XP: `reviews_path` (empty uses `plugin-data/pixel-hq/reviews.jsonl` under the root home),
+  `legacy_ledger_path` (optional read-only older ledger), `kanban_xp`, `xp_pass`, `xp_revise`, and `xp_fail`.
+  Relative ledger paths resolve against `<root Hermes home>/plugin-data/pixel-hq/`, never the server's
+  working directory. Absolute paths (including existing symlinks) are honoured as deliberate operator
+  choices and may write outside plugin-data; only the default review path is confined there.
+- Kanban: `exclude_boards`, `stale_days`, and `needs_input_keywords` for *waiting for you* classification.
+- Reactor: the flat keys `prometheus_url`, `metrics_prefix` (`vllm|tensorfold|sglang`), `node_aliases`, and
+  `model_endpoint`. Leave both endpoints empty to hide the reactor.
 - `roster.json` — rooms, zones and one entry per bot (role, character class, colour, `leader`, `remote`).
   Profiles missing from the roster are added automatically as *Recruits*.
-- `config.json` — locale/timezone, `operator_name` (author of comments you write from the UI),
-  `orchestrator_profile` (writes the ledger, receives triage runs), `ledger_path`, `exclude_boards`,
-  keywords that file a blocked card under *waiting for you*, XP values, and the `gpu` block
-  (`prometheus_url`, `metrics_prefix` `vllm|tensorfold|sglang`, `node_aliases`, `model_endpoint`).
-  Leave `prometheus_url` empty to hide the reactor.
 
-Changes to config, roster, collector or UI apply on the next refresh — no restart.
+Existing `config.json` files with nested `xp` or `gpu` blocks still work; an explicit flat key wins over
+its nested equivalent in the same file. The old `ledger_path` key is accepted as an alias for
+`legacy_ledger_path`, unless that flat key is explicitly present.
+
+Changes to settings, roster, collector or UI apply on the next uncached refresh — no restart.
 
 ### Try it without a fleet
 
@@ -101,12 +125,22 @@ python3 pixelhq/render.py        && xdg-open dist/pixel-hq.html   # your real da
 
 ## What it reads and does (disclosure)
 
+**Rate** on a Live session (not its sub-agents) or the Office character card: choose **pass**, **revise** or
+**fail**, adjust the four 1–5 scores (default 4) and reference, then **Confirm** or **Cancel**. Only Confirm
+appends a review. The reference starts with the session/current quest title (80 characters); edits may use
+up to 200 characters. The result appears inline and a successful review refreshes XP and attributes.
+Controls are available inside Desktop; `?actions=1` exposes them on the standalone page for demos only
+(no backend host there). The footer reports signed raw Kanban/review XP and source warnings.
+
 - **Reads** (read-only, local): each profile's `state.db` (sessions, last activity, last tool call),
   `~/.hermes/kanban/boards/*/kanban.db` (cards, events, comments), the quality ledger, `hermes profile list`.
 - **Network**: only the Prometheus and model endpoints you configure (none by default).
-- **Writes**, only on your confirmed click, and only through the official CLI `hermes kanban --board … comment |
+- **Kanban writes**, only on your confirmed click, and only through the official CLI `hermes kanban --board … comment |
   unblock | archive`: never into the database, never `archive --rm`. Every action is appended to
   `var/actions.jsonl`; archiving copies the card's workspace to `var/archived-workspaces/` first.
+- **Reviews**: confirmed ratings append to `reviews_path` (default
+  `~/.hermes/plugin-data/pixel-hq/reviews.jsonl`, created when missing) with UTC time, `source: "ui"` and
+  `operator_name` as reviewer. Hermes databases and the optional legacy ledger remain read-only.
 - **Triage run**: creates a new chat session with your orchestrator profile and submits a briefing that
   contains only card keys (board/id) — never card text — so untrusted card content cannot steer the prompt.
 - No telemetry, no self-update, no credentials. Untrusted text (card titles, session titles, tool
@@ -117,13 +151,14 @@ python3 pixelhq/render.py        && xdg-open dist/pixel-hq.html   # your real da
 ```
 plugin.yaml           manifest (no tools/hooks)
 __init__.py           no-op register()
-dashboard/            backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action}
+dashboard/            backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action,review}
 desktop/plugin.js     desktop page /pixel-hq (SandboxedFrame + postMessage)
 pixelhq/collect.py      snapshot collector (read-only)
 pixelhq/live.py         "what is everyone doing" (10-s polling)
 pixelhq/actions.py      Kanban actions via the hermes CLI (category whitelist, audit log)
 pixelhq/blockers.py     blocked-card details for a triage chat
-pixelhq/ui.html         the whole UI, one file, no build step
+pixelhq/reviews.py      validated, append-only UI review records
+pixelhq/ui/             index.html, style.css, app.js (inlined by page.py; no build step)
 pixelhq/demo.py         synthetic data
 docs/video/           demo-video renderer (Playwright + ffmpeg), not part of the plugin
 ```

@@ -1,19 +1,20 @@
 {
-  "_doc": "Copy to config.json and adjust. Every key is optional; see config.py for defaults.",
   "locale": "en-GB",
-  "timezone": "Europe/London",
+  "timezone": "UTC",
+  "theme_label": "PIXEL HQ",
   "operator_name": "operator",
   "orchestrator_profile": "default",
-  "hermes_home": "~/.hermes",
-  "ledger_path": "~/.hermes/quality/ledger.jsonl",
-  "exclude_boards": ["pixel-hq-sandbox"],
+  "reviews_path": "",
+  "legacy_ledger_path": "",
+  "kanban_xp": true,
+  "xp_pass": 10,
+  "xp_revise": 3,
+  "xp_fail": -5,
   "stale_days": 14,
+  "exclude_boards": [],
   "needs_input_keywords": ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"],
-  "xp": {"pass": 10, "revise": 3, "fail": -5},
-  "gpu": {
-    "prometheus_url": "",
-    "metrics_prefix": "vllm",
-    "node_aliases": {"gpu-node-1": "GPU1"},
-    "model_endpoint": ""
-  }
+  "prometheus_url": "",
+  "metrics_prefix": "vllm",
+  "model_endpoint": "",
+  "node_aliases": {}
 }

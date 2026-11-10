@@ -1,11 +1,89 @@
 name: pixel-hq
-version: "1.0.0"
+version: 1.1.0
 manifest_version: 2
 api_version: 1
-description: "Gamified fleet view for Hermes Agent bots: a pixel office with one sprite per profile, XP/HP/levels from your quality ledger, a live 'what is every bot doing' board, a Kanban blocked-card triage with one-click actions, and a GPU/LLM reactor panel. Desktop page /pixel-hq. Read-only except the Kanban actions you confirm."
+description: "Gamified fleet view for Hermes Agent bots: a pixel office with one sprite per profile, XP/HP/levels from your quality ledger, a live 'what is every bot doing' board, a Kanban blocked-card triage with one-click actions, and a GPU/LLM reactor panel. Desktop page /pixel-hq. The pixelhq_review tool records quality reviews in the JSONL ledger. Read-only except confirmed Kanban actions and submitted reviews."
 author: W4-NERF
 license: MIT
 homepage: https://github.com/W4-NERF/pixel-hq
 requires_hermes: ">=0.22.2"
 kind: standalone
 tags: [desktop, fleet, kanban, dashboard, gamification]
+capabilities:
+  provides_tools: [pixelhq_review]
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []
+config_schema:
+  locale:
+    type: str
+    default: "en-GB"
+    description: "BCP 47 locale used to format numbers and dates."
+  timezone:
+    type: str
+    default: "UTC"
+    description: "IANA timezone used for clocks and dates."
+  theme_label:
+    type: str
+    default: "PIXEL HQ"
+    description: "Title displayed in the headquarters header."
+  operator_name:
+    type: str
+    default: "operator"
+    description: "Operator name used to attribute comments and reviews from the UI."
+  orchestrator_profile:
+    type: str
+    default: "default"
+    description: "Profile that receives unattributed helper XP and triage briefings."
+  reviews_path:
+    type: str
+    default: ""
+    description: "Review JSONL path, or empty to use plugin-data/pixel-hq/reviews.jsonl under the root Hermes home."
+  legacy_ledger_path:
+    type: str
+    default: ""
+    description: "Optional path to an older quality ledger that is read without modification."
+  kanban_xp:
+    type: bool
+    default: true
+    description: "Award XP for Kanban outcomes in addition to reviews."
+  xp_pass:
+    type: int
+    default: 10
+    description: "XP contribution for each passed review or completed Kanban task."
+  xp_revise:
+    type: int
+    default: 3
+    description: "XP contribution for each revision requested by a review or Kanban event."
+  xp_fail:
+    type: int
+    default: -5
+    description: "XP contribution for each failed review or failed Kanban outcome."
+  stale_days:
+    type: int
+    default: 14
+    description: "Number of blocked days after which a card is considered stale."
+  exclude_boards:
+    type: list
+    default: []
+    description: "Kanban board slugs excluded from all views and XP calculations."
+  needs_input_keywords:
+    type: list
+    default: ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"]
+    description: "Case-insensitive keywords that classify blocked cards as waiting for operator input."
+  prometheus_url:
+    type: str
+    default: ""
+    description: "Prometheus base URL for reactor metrics, or empty to disable metric requests."
+  metrics_prefix:
+    type: str
+    default: "vllm"
+    description: "Serving metric family prefix used in Prometheus queries."
+  model_endpoint:
+    type: str
+    default: ""
+    description: "OpenAI-compatible base URL for model discovery, or empty to disable model requests."
+  node_aliases:
+    type: dict
+    default: {}
+    description: "Mapping from Prometheus instance labels to reactor display names."

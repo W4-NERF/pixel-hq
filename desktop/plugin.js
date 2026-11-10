@@ -111,6 +111,20 @@ function makePage(ctx) {
             .then(d => { if (d) qc.setQueryData(key, d) })
             .catch(err => post({ pixelhqActionResult: { ok: false, error: restartHint(errText(err)), board: a.board, id: a.id } }))
         }
+        if (m.pixelhqReview) {
+          const review = m.pixelhqReview
+          const target = { agent: review.agent, sessionId: review.sessionId || null }
+          ctx.rest('/review', { method: 'POST', body: review })
+            .then(result => {
+              post({ pixelhqReviewResult: Object.assign({}, result, target) })
+              if (!result.ok) return
+              // A failed refresh must not turn an already-saved review into an apparent write failure.
+              return ctx.rest('/snapshot?max_age=0')
+                .then(data => { if (data) qc.setQueryData(key, data) })
+                .catch(err => post({ pixelhqError: restartHint(errText(err)) }))
+            })
+            .catch(err => post({ pixelhqReviewResult: Object.assign({ ok: false, message: restartHint(errText(err)) }, target) }))
+        }
         if (m.pixelhqTriage) {
           const t = m.pixelhqTriage
           startTriage(t.keys, t.scope, cfg)

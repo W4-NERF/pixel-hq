@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel HQ</title>
+<style>
+/*PIXELHQ_CSS*/</style></head><body>
+<header class="hdr"><div class="l"><span class="px" style="font-size:20px" id="brand">PIXEL HQ</span>
+<span><button class="on" data-tab="office">Office</button> <button data-tab="live" id="livetab">Live</button> <button data-tab="board">Leaderboard</button> <button data-tab="blk" id="blktab">Blocked</button></span></div>
+<div style="display:flex;gap:8px;align-items:center"><span class="tag" id="stand"></span><button id="reload">Reload</button></div></header>
+<div class="hud" id="hud"></div>
+
+<section class="view on" id="office"><div>
+ <div class="filters" id="ofilter"><button class="on" data-f="all">All</button><button data-f="running">Working</button><button data-f="blocked">Blocked</button><button data-f="idle">Idle</button></div>
+ <div class="floor" id="floor"></div>
+ <div class="log" style="margin-top:16px"><h3>EVENT LOG</h3><div class="logbody" id="log1" style="max-height:340px"></div></div></div>
+ <div class="right"><div id="detail" style="position:sticky;top:12px"></div></div>
+</section>
+
+<section class="view" id="board"><div>
+ <div class="filters" id="bfilter"></div>
+ <table><thead><tr><th>#</th><th></th><th data-k="id">BOT</th><th data-k="lvl" class="on">LVL</th><th data-k="xp">XP</th><th data-k="hp">HP</th><th title="pass / revise / fail">P/R/F</th><th data-k="blocked">BLOCKED</th><th>STATUS</th><th>QUEST</th><th>MODEL</th></tr></thead><tbody id="tb"></tbody></table></div>
+ <div class="log"><h3>EVENT LOG</h3><div class="logbody" id="log2" style="max-height:640px"></div></div>
+</section>
+<section class="view" id="live">
+ <div id="livenote" class="note" style="display:none"></div>
+ <div class="lgrid" id="lactive"></div>
+ <div class="sec" style="margin:16px 0 4px">IDLE / INACTIVE</div><div id="lidle" class="lidle"></div>
+</section>
+<section class="view" id="blk">
+ <div class="note">Click a card for details and actions. "Answer &amp; unblock", "Retry" and "Archive" need a second click to confirm. Archiving backs up the card's workspace first (var/archived-workspaces).</div>
+ <div id="bres"></div>
+ <div class="chips" id="bcats"></div>
+ <div class="chips"><span class="mut" style="font-size:11px">Board:</span><span id="bboards" class="chips"></span>
+  <button id="bstale" style="margin-left:12px"></button>
+  <button id="btriage" style="margin-left:auto;border-color:var(--olive)"></button></div>
+ <div id="blist"></div>
+</section>
+<div class="foot" id="foot"></div>
+
+<script>
+/*PIXELHQ_JS*/</script></body></html>
