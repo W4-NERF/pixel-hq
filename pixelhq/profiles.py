@@ -74,6 +74,9 @@ def _read(path: Path, warnings: list[str]) -> dict:
         return {}
 
 
+IS_WINDOWS = os.name == "nt"
+
+
 def _gateway(directory: Path, warnings: list[str]) -> str | None:
     path = directory / "gateway.pid"
     try:
@@ -88,13 +91,49 @@ def _gateway(directory: Path, warnings: list[str]) -> str | None:
         # The JSON may contain private argv entries; do not echo its contents or OS paths.
         _warn(warnings, f"{directory.name}/gateway.pid", f"invalid or unreadable PID ({type(exc).__name__})")
         return None
+    alive = _pid_alive(pid)
+    return None if alive is None else ("running" if alive else "stopped")
+
+
+def _pid_alive(pid: int) -> bool | None:
+    """Is the process there? True/False, or None when that cannot be told without touching it.
+
+    The probe never signals the target. On Windows ``os.kill(pid, 0)`` is not a probe: any signal value
+    other than CTRL_C/CTRL_BREAK makes Python call TerminateProcess, i.e. it would kill the gateway.
+    """
+    if IS_WINDOWS:
+        return _pid_alive_windows(pid)
     try:
-        os.kill(pid, 0)
+        os.kill(pid, 0)  # POSIX only (Windows returned above): signal 0 checks existence, delivers nothing
     except PermissionError:
-        return "running"
+        return True  # exists, owned by someone else
     except (OSError, ValueError, OverflowError):
-        return "stopped"
-    return "running"
+        return False
+    return True
+
+
+def _pid_alive_windows(pid: int) -> bool | None:
+    """Read-only liveness check through OpenProcess/WaitForSingleObject; None on any doubt."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        query_limited, synchronize, access_denied, wait_timeout = 0x1000, 0x00100000, 5, 0x102
+        handle = kernel32.OpenProcess(query_limited | synchronize, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == access_denied  # denied: it exists but is not ours
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == wait_timeout  # timeout: still running
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return None
 
 
 def root_home() -> Path:

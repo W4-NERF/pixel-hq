@@ -1,5 +1,5 @@
 name: pixel-hq
-version: 1.1.1
+version: 1.1.2
 manifest_version: 2
 api_version: 1
 description: "Gamified fleet view for Hermes Agent bots: a pixel office with one sprite per profile, XP/HP/levels from your quality ledger, a live 'what is every bot doing' board, a Kanban blocked-card triage with one-click actions, and a GPU/LLM reactor panel. Desktop page /pixel-hq. The pixelhq_review tool records quality reviews in the JSONL ledger. Read-only except confirmed Kanban actions and submitted reviews."

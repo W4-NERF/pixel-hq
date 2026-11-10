@@ -1,12 +1,16 @@
 """Append UI and tool reviews to the JSONL ledger; never write to Hermes databases."""
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import fcntl  # POSIX advisory lock
+except ImportError:  # Windows has no fcntl: appends still use one O_APPEND write, just without the lock
+    fcntl = None
 
 if __package__:
     from .config import ledger_path
@@ -78,10 +82,12 @@ def _append(body: dict, cfg: dict, known_bots, *, reviewer: str, source: str) ->
 
 
 def _append_line(path: Path, payload: bytes) -> None:
-    """One O_APPEND write, serialized across writers, with rollback on a short write."""
-    fd = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT, 0o600)
+    """One O_APPEND write with rollback on a short write; serialized across writers where flock exists."""
+    # O_BINARY (Windows only): no newline translation, so the ledger stays byte-identical across platforms.
+    fd = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
         size = os.fstat(fd).st_size
         if size:
             os.lseek(fd, -1, os.SEEK_END)
