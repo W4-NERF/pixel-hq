@@ -68,10 +68,18 @@ hermes plugins install W4-NERF/pixel-hq      # or from the Hermes plugin catalog
 hermes plugins enable pixel-hq
 ```
 
-Then **restart the Hermes desktop app once** (the backend routes mount at start) and open **Pixel HQ** in the
+Then **restart the Hermes gateway once** (`hermes gateway restart`; the backend routes mount when the gateway starts) and open **Pixel HQ** in the
 sidebar or via ⌘K → *Open Pixel HQ*. If you run Hermes with profiles, enable the plugin in the root home
 (the desktop backend runs there) and in any profile that should see it:
 `hermes -p <profile> plugins enable pixel-hq`.
+
+### Platforms
+
+| Platform | Status |
+|---|---|
+| Linux | Developed and tested here. |
+| Windows (native Hermes) | Use **1.1.2 or later**: earlier versions check whether the gateway is alive with a call that, according to the Python documentation, terminates the process on Windows (not reproduced). Until the plugin catalog lists 1.1.2, install from this repository (`hermes plugins install W4-NERF/pixel-hq`), not from the catalog. 1.1.2 ran on one Windows machine that already had WSL installed. On one machine without WSL, WSL was installed while Pixel HQ was being set up (one report). Pixel HQ does not call WSL itself and we have not found what triggers this, so expect that it may happen. |
+| macOS | Not tested. |
 
 ### Configure
 
