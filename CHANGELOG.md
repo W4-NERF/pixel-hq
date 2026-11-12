@@ -4,6 +4,54 @@ All notable changes to Pixel HQ are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version dates below come from git history;
 verification limits are stated separately from implemented changes.
 
+## [Unreleased]
+
+### Fixed
+
+- **Reactor**: Prometheus reports `NaN` for an idle server (0/0 ratios, empty histograms); such a sample made the
+  whole snapshot fail. Non-finite or malformed samples now show as unknown, an idle KV cache reading of 0 is kept, and
+  an unreachable Prometheus is asked once per snapshot instead of up to 15 times with a 4-second timeout each.
+- **Blocked**: `needs_input_keywords` match whole words or phrases. The defaults `go` and `gate` matched inside words
+  such as *good*, *Django* or *investigate*, which filed technical cards as *waiting for you* and refused **Retry**.
+  An archived parent card no longer keeps its child in *waiting upstream* (Hermes releases a child once every parent
+  is done or archived).
+- **Comment**: the comment text is passed after `--`, so text such as `--help` (which made the CLI print its help and
+  report success without posting) or `--author=…` stays the comment body.
+- A Kanban action whose follow-up snapshot refresh failed was reported as failed after it had run, inviting a
+  duplicate comment or retry. A failed audit-log write after the CLI ran is now a warning instead of an error, and a
+  snapshot collected while an action ran is no longer cached as fresh afterwards.
+- A roster answer that arrives after the page's timeout no longer completes a newer save (which could mark unsaved
+  edits as saved and drop them).
+- An invalid `locale` or `timezone` setting (e.g. `en_GB`) no longer blanks the page or fails triage runs; the page
+  falls back to `en-GB` / `UTC`.
+- **Reload** no longer stays on “loading …” when the snapshot is unchanged; live data that arrives before the first
+  snapshot no longer shows a render error; the leaderboard status follows live data; the first desk click after a drag
+  and drop is no longer ignored; a request whose timer fires while the system clock was set back still times out.
+- Standalone page: card text such as `<!--<script>` can no longer leave the rendered page blank (the embedded data now
+  escapes every `<`, `>` and `&`).
+- A malformed `hermes_home` in `config.json` falls back to the Hermes home with a warning instead of failing every route.
+
+### Changed
+
+- `POST /soul-history` accepts `application/json` bodies only (415 otherwise), like the other write routes.
+- `dashboard/manifest.json` carries the plugin version (it still said 1.0.0).
+
+### Added
+
+- Development tooling: GitHub Actions CI (Ruff, the JS and function-length gates, the test suite on Python 3.11–3.13
+  and a demo render on Windows and macOS), Dependabot, pre-commit hooks, `pyproject.toml` (pytest and Ruff settings),
+  `requirements-dev.txt`, `.editorconfig` and `.gitattributes`.
+- `CONTRIBUTING.md`, `SECURITY.md` (private vulnerability reports), issue forms and a pull request template;
+  `docs/ledger.md` describes the current review ledger fields.
+
+### Verification
+
+- Offline test suite: 2154 Python tests, including new regression tests for each fix above; each was checked to fail
+  without its fix. The standalone page was rendered in Chromium with a hostile card title.
+- The Kanban comment change was checked against the argument parser of `hermes kanban comment` in Hermes 0.19.0
+  (argparse, `text nargs="+"`).
+- **Not verified:** a real Hermes gateway, the Desktop app, Windows and macOS beyond the CI demo render.
+
 ## [1.3.0] - 2026-11-12
 
 ### Added
@@ -210,3 +258,8 @@ Sources: `1df6847`, `d86f083` and [round-1 §1 and §8](docs/specs/round-1.md).
 - Project and plugin renamed from Bot-HQ to Pixel HQ (`pixel-hq`).
 
 Sources: history from `712c909` through the 1.0.0 documentation commit `f059cae`.
+
+[Unreleased]: https://github.com/W4-NERF/pixel-hq/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/W4-NERF/pixel-hq/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/W4-NERF/pixel-hq/compare/v1.0.0...v1.2.0
+[1.0.0]: https://github.com/W4-NERF/pixel-hq/releases/tag/v1.0.0
