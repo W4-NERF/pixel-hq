@@ -209,22 +209,28 @@ assert.ok(card.querySelector('[data-review]').innerHTML.includes('Review saved.'
 """)
 
 
-@pytest.mark.parametrize("setup", [
-    "delete globalThis.crypto;",
-    "globalThis.crypto = {};",
-    "globalThis.crypto = {getRandomValues: 7};",
-    "globalThis.crypto = {getRandomValues() { throw new Error('unavailable'); }};",
-    "globalThis.crypto = {getRandomValues(bytes) { bytes.fill(171); return bytes; }};",
-    "globalThis.crypto = {getRandomValues(bytes) { return bytes; }};",
+@pytest.mark.parametrize("stub", [
+    "undefined",
+    "{}",
+    "{getRandomValues: 7}",
+    "{getRandomValues() { throw new Error('unavailable'); }}",
+    "{getRandomValues(bytes) { bytes.fill(171); return bytes; }}",
+    "{getRandomValues(bytes) { return bytes; }}",
 ], ids=["no-crypto", "no-method", "method-not-callable", "method-throws", "crypto-fills", "crypto-leaves-zeros"])
-def test_rid_is_lowercase_hex_with_and_without_crypto(tmp_path, setup):
-    run(tmp_path, setup + """
+def test_rid_is_lowercase_hex_with_and_without_crypto(tmp_path, stub):
+    # Node 22+ defines ``globalThis.crypto`` as a getter without a setter: a plain assignment is silently
+    # ignored and the probe would exercise the real Web Crypto API. ``defineProperty`` replaces it everywhere.
+    run(tmp_path, """
+const STUB = %s;
+if (STUB === undefined) delete globalThis.crypto;
+else Object.defineProperty(globalThis, 'crypto', {value: STUB, configurable: true, writable: true});
+assert.equal(globalThis.crypto, STUB, 'the probe replaced the crypto object');
 const ids = Array.from({length:50}, () => newRid());
 ids.forEach(id => assert.match(id, RID));
-if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function' || SETUP.includes('throw'))
+if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function' || %s)
   assert.ok(new Set(ids).size > 45, 'the Math.random fallback does not repeat');
-if (SETUP.includes('fill(171)')) assert.equal(ids[0], 'ab'.repeat(12), 'getRandomValues is the first choice');
-""".replace("SETUP", json.dumps(setup)))
+if (%s) assert.equal(ids[0], 'ab'.repeat(12), 'getRandomValues is the first choice');
+""" % (stub, json.dumps("throw" in stub), json.dumps("fill(171)" in stub)))
 
 
 def test_review_bridge_forwards_the_rid_to_the_backend(tmp_path):
