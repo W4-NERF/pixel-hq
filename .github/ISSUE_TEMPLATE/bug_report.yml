@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in Pixel HQ does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please leave out tokens, private paths and real bot data; synthetic examples are enough.
+  - type: input
+    id: version
+    attributes:
+      label: Pixel HQ version
+      description: Shown in the page footer, or `version` in plugin.yaml.
+      placeholder: "1.3.0"
+    validations:
+      required: true
+  - type: input
+    id: hermes
+    attributes:
+      label: Hermes version
+      placeholder: "0.23.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux, Windows, macOS, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      options: [Hermes Desktop, Standalone page (render.py), pixelhq_review tool, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Pixel HQ
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Messages or logs
+      description: Footer warnings, gateway log lines or browser console output (redacted).
+      render: text

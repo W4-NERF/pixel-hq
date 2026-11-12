@@ -1,0 +1,42 @@
+# Optional local hooks: `pip install pre-commit && pre-commit install`. CI runs the same checks.
+exclude: ^pixelhq/fonts/OFL-.*\.txt$  # third-party licence texts stay byte-for-byte
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+
+  - repo: local
+    hooks:
+      - id: jscheck
+        name: JS syntax (node --check)
+        entry: python tools/jscheck.py
+        language: system
+        files: \.js$
+        pass_filenames: false
+      - id: jslint
+        name: JS line and function length
+        entry: python tools/jslint.py
+        language: system
+        files: \.js$
+        pass_filenames: false
+      - id: funclen
+        name: Python function length
+        entry: python tools/funclen.py
+        language: system
+        files: ^(pixelhq|dashboard)/.*\.py$
+        pass_filenames: false
