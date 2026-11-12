@@ -11,6 +11,7 @@ function bars(b) {
 }
 
 function detail(b) {
+  const held = heldConfig(b);
   const a = b.attrs.map((v, i) =>
     '<div class="attr" title="' + ATTR_T[i] + '"><span>' + ATTR[i] + '</span><div class="bar at"><b style="width:' +
       (v == null ? 0 : Number(v) * 20) + '%"></b></div><span>' + (v == null ? '–' : Number(v)) + '</span></div>'
@@ -47,9 +48,10 @@ function detail(b) {
       : '') +
     '</div>' + a + '<div class="sec">QUESTS (' + Number(b.openQuests) + ' open, ' + Number(b.blocked) +
     ' blocked)</div>' + qs + (more > 0 ? '<div class="mut" style="font-size:10px">+' + more + ' more</div>' : '') +
-    '<div class="sec">ACHIEVEMENTS</div>' + ach + '</div>';
+    '<div class="sec">ACHIEVEMENTS</div>' + ach + confSlotHtml(b) + '</div>';
   bindReviews(document.getElementById('detail'));
   bindJumps(document.getElementById('detail'));
+  mountConfig(document.getElementById('detail'), b, held);
 }
 
 function showDetail() {

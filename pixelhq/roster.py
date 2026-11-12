@@ -134,9 +134,9 @@ def _clean(roster: dict) -> dict:
     return {"rooms": rooms, "bots": [_fields(bot, BOT_KEYS) for bot in roster["bots"]]}
 
 
-def _replace(path: Path, payload: bytes) -> None:
+def _replace(path: Path, payload: bytes, prefix: str = ".roster-") -> None:
     """Keep temporary bytes in the target directory and remove them on any failure."""
-    fd, name = tempfile.mkstemp(prefix=".roster-", suffix=".tmp", dir=path.parent)
+    fd, name = tempfile.mkstemp(prefix=prefix, suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
             stream.write(payload)

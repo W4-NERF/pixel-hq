@@ -14,7 +14,7 @@ from pixelhq.demo import snapshot as demo_snapshot
 from pixelhq.page import page_html
 
 ROOT = Path(__file__).resolve().parents[1]
-GENERIC = "config common profiles scoring dbutil collect live reviews roster actions page demo blockers".split()
+GENERIC = "config common profiles scoring dbutil collect live reviews roster soul_history actions page demo blockers".split()
 
 
 def run(script, *args, cwd, env=None, timeout=60):
@@ -85,7 +85,7 @@ def update_files_on_disk():
             text = text.replace("reviews_path", "reviews_file")
         path.write_text(text, encoding="utf-8")
     manifest = copy / "plugin.yaml"
-    manifest.write_text(manifest.read_text(encoding="utf-8").replace("version: 1.2.0", "version: 9.9.9"), encoding="utf-8")
+    manifest.write_text(manifest.read_text(encoding="utf-8").replace("version: 1.3.0", "version: 9.9.9"), encoding="utf-8")
 
 async def main():
     first = await api.snapshot()
@@ -101,7 +101,15 @@ async def main():
         "review": (await api.review({"agent": "ops-bot", "verdict": "pass"}))["ok"],
         "roster": (await api.roster({"roster": {}}))["ok"],
         "action": (await api.blocker_action({}))["ok"],
+        "soul": await soul(api),
     }
+
+async def soul(api):
+    history = api._module("soul_history")
+    saved = await api._soul_call(history.save, {"bot": "ops-bot", "sourceKey": "local", "text": "previous SOUL", "rid": "ab" * 8})
+    rows = await api._soul_call(lambda cfg: history.list_versions("ops-bot", "local", cfg))
+    got = await api._soul_call(lambda cfg: history.item("ops-bot", "local", rows[0]["id"], cfg))
+    return [saved["ok"], len(rows), got["text"], history is api._PACKAGE.soul_history]
 
 print(json.dumps(asyncio.run(main())))
 '''
@@ -125,6 +133,8 @@ def test_files_updated_under_a_running_backend_keep_serving_the_loaded_version(f
     assert report["second_cfg"] == [loaded, "9.9.9"]
     assert report["live_bots"] == expected and report["page"] is True
     assert report["review"] is True and report["roster"] is False and report["action"] is False
+    # round 4: the SOUL history module is part of the one loaded version and keeps working after the update
+    assert report["soul"] == [True, 1, "previous SOUL", True]
 
 
 @pytest.mark.parametrize("script, args", [("render.py", ["--demo"]), ("demo.py", []), ("blockers.py", []),
@@ -152,9 +162,9 @@ def test_sys_path_is_only_touched_inside_the_main_guard():
 
 def test_manifest_version_and_loaded_version_agree_on_disk():
     manifest = (ROOT / "plugin.yaml").read_text(encoding="utf-8")
-    assert re.search(r"^version: 1\.2\.0$", manifest, re.M)
+    assert re.search(r"^version: 1\.3\.0$", manifest, re.M)
     assert "provides_middleware" not in manifest
-    assert config.disk_version() == config.LOADED_VERSION == "1.2.0"
+    assert config.disk_version() == config.LOADED_VERSION == "1.3.0"
 
 
 def test_disk_version_is_read_on_every_call_and_loaded_version_is_not(tmp_path, monkeypatch):

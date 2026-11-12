@@ -12,7 +12,7 @@ triage chats are explicit operations; see [What it reads and writes](#what-it-re
 
 ![Pixel HQ demo](docs/demo.gif)
 
-*22-second highlight of the 1.0.0 UI (synthetic data); the screenshots below show 1.2.0. Full 57-second demo: [1080p](https://github.com/W4-NERF/pixel-hq/releases/download/v1.0.0/pixel-hq-demo.mp4) · [720p](https://github.com/W4-NERF/pixel-hq/releases/download/v1.0.0/pixel-hq-demo-720p.mp4). These show the 1.0.0 UI; see [`docs/video/`](docs/video/README.md) to re-render them.*
+*22-second highlight of the 1.0.0 UI (synthetic data); the screenshots below show 1.3.0. Full 57-second demo: [1080p](https://github.com/W4-NERF/pixel-hq/releases/download/v1.0.0/pixel-hq-demo.mp4) · [720p](https://github.com/W4-NERF/pixel-hq/releases/download/v1.0.0/pixel-hq-demo-720p.mp4). These show the 1.0.0 UI; see [`docs/video/`](docs/video/README.md) to re-render them.*
 
 ## Install
 
@@ -34,7 +34,7 @@ any profile that should see it: `hermes -p <profile> plugins enable pixel-hq`.
 ## Platforms
 
 Versions reach the plugin catalog through a reviewed SHA-bump PR, so the catalog can lag behind this
-repository. As of **2026-11-12** the catalog lists **1.1.2**; 1.2.0 has been submitted.
+repository. As of **2026-11-12** the catalog lists **1.1.2**; 1.3.0 has been submitted.
 
 | Platform | Status |
 |---|---|
@@ -101,8 +101,10 @@ with `legacy_ledger_path`; it remains read-only.
 | ![Leaderboard](docs/screens/leaderboard.png) | ![Blocked](docs/screens/blocked.png) |
 | **Edit layout** (a bot moved, not yet saved) | **Roster** |
 | ![Edit layout](docs/screens/edit.png) | ![Roster](docs/screens/roster.png) |
+| **Config** (SOUL change, preview before saving) | |
+| ![Config](docs/screens/config.png) | |
 
-These screenshots use synthetic data and show the 1.2.0 UI.
+These screenshots use synthetic data and show the 1.3.0 UI.
 
 - **Office** — rooms and departments from your roster, a sprite per bot, current-step speech bubbles,
   character cards (level, XP, HP, attributes, quests, achievements) and the event log. **Talk to this bot**
@@ -253,6 +255,43 @@ titles and location text have a 40-character limit; room notes allow 80. Text re
 bidi-override characters. A local bot must refer to an existing profile and every bot to an existing
 department. Invalid saves return an inline error without writing.
 
+## Bot configuration
+
+Every character card in the Office has a **Config** section, collapsed by default. Opening it asks Hermes
+for that bot's profile once (**Reload** asks again) and shows:
+
+- **Read-only facts:** model `provider / default`, description, skills (enabled count and the disabled
+  names), toolsets (enabled names, pinned yes/no) and MCP servers (name, transport, enabled). Lists
+  collapse after 12 entries (“+N more”). Model, skills and toolsets are changed in Hermes itself
+  (Bot Mode → Edit), not here.
+- **SOUL editor:** the bot's `SOUL.md` in a text area. **Edit** → **Preview changes** shows a line diff
+  (added and removed lines, unchanged context collapsed to 3 lines, at most 400 diff lines) → **Confirm
+  save** needs a second click. **Back to editing** keeps the draft; **Cancel** drops it. Unchanged text
+  has no Save. The text is stored as typed (no trimming or re-formatting); line endings are normalised to
+  `\n`. Limits: 64 KiB of UTF-8; control characters other than tab and line break are rejected with an
+  inline message. If the loaded SOUL has a `## Messaging other agents` heading and the draft does not,
+  the preview warns that the Bot Mode messaging section was removed; saving stays possible.
+- **History:** the previous SOULs of this bot, newest first (time and first line). **Preview** shows the
+  diff from the current SOUL to the chosen version; **Confirm restore** (second click) saves it like any
+  other edit, so the version it replaces is kept as well. The newest 10 versions per bot are kept.
+
+**Save steps** (the same for an edit and a restore, one request id): (1) read the profile again — if the
+SOUL changed since you opened it, nothing is written and the card says so (**Reload** keeps your text and
+compares it with the current version, the editor itself is never replaced under the cursor); (2) store the *current* SOUL in the history — if that fails,
+nothing is written; (3) write the new SOUL through Hermes; (4) read it back and compare. The result is
+one of *saved*, *saved but the read-back differs*, *conflict*, *not written*, *error* or *unsupported*.
+
+**Where the data comes from.** Hermes' own profile-editor calls (`profiles.describe`, `profiles.configure`),
+the same ones Bot Mode's editor uses. The plugin never reads or writes profile files for this, and it
+never shows raw `config.yaml`, `.env`, `auth.json` or memory files. A bot that runs on another host is
+reachable only when the Desktop app has exactly one connection to it; otherwise the card says “Not
+reachable from this Desktop” (none) or that more than one connection offers the bot (nothing is called).
+A Hermes version without these calls shows “This Hermes version has no profile editor API”. Saving never
+submits a prompt and never touches any other profile setting.
+
+On the standalone page the Config section shows synthetic demo data, read-only; editing and the history
+need Hermes Desktop.
+
 ## What it reads and writes (disclosure)
 
 **Rate**: choose **pass**, **revise** or **fail**, adjust the four 1–5 scores (default 4) and reference,
@@ -266,7 +305,11 @@ sent”. The footer reports signed raw Kanban/review XP and source warnings.
   and `state.db` (sessions, last activity, last tool call); `kanban/boards/*/kanban.db` below the root
   Hermes home (cards, events, comments, dependencies); settings, roster and quality ledgers. Profile
   discovery reads directories directly, without running `hermes profile list`.
-- **Network**: only the Prometheus and model endpoints you configure, none by default.
+- **Profile data** (Desktop only, read): the Config section asks Hermes' `profiles.describe` for the SOUL,
+  the model pin, skills, toolsets and MCP server names of a bot when you open it. Remote bots are asked only
+  through a Desktop connection that Hermes itself provides. Nothing else of a profile is read this way.
+- **Network**: only the Prometheus and model endpoints you configure, none by default. The new features
+  add no network call by the plugin; their requests go through the Hermes Desktop connection.
 - **Kanban writes**: only on your confirmed action, through the official CLI
   `hermes kanban --board … comment|unblock|archive`, never by database writes and never `archive --rm`.
   Each action is logged in `var/actions.jsonl` in the plugin checkout; archiving first copies the card's
@@ -279,12 +322,25 @@ sent”. The footer reports signed raw Kanban/review XP and source warnings.
   already recorded.” instead of appending again.
 - **Roster writes**: only explicit Save or Reset, to `plugin-data/pixel-hq/roster.json` and its
   one-generation backup under the root Hermes home, as described above.
+- **SOUL writes**: only through Hermes' `profiles.configure`, only after **Preview changes** and a second
+  click (**Confirm save** / **Confirm restore**), and only the `soul` field. Before each write the current
+  SOUL is stored verbatim in `plugin-data/pixel-hq/soul-history/<source>/<bot>/` under the root Hermes home (one
+  `.md` file per version named with the time and the full request id, mode 0600, the newest 10 per bot kept, older
+  ones deleted; `soul-history/` and the directories below it must be real directories, while `plugin-data/` and
+  `plugin-data/pixel-hq/` may be links; the key is derived by
+  the backend from the connection and bot id, never from a path in a request). This is the only new
+  write path of the plugin. It never writes the SOUL file directly.
+- **Update check**: the plugin list is read through Hermes' `plugins.manage` (`list`) to find out whether
+  Pixel HQ itself has an update — at page load and then at most every 6 hours (every outcome, an error included,
+  is kept for those 6 hours, so reopening the page does not ask again). Only the row for
+  `pixel-hq` is used. The plugin never updates itself; see [Updating](#updating).
 - **Triage run**: creates a new orchestrator chat and submits a briefing containing card keys and one
   selection sentence built by the host from fixed strings, category, validated board id and stale
   threshold — never card text or page-supplied prose. It does not submit text into an existing session.
 - **Session actions**: Open navigates to a session; Talk opens a new chat; Ask for status prepares and
   focuses a draft only when empty. These actions do not submit a prompt. Missing Desktop capabilities
   return “not supported by this Hermes Desktop version”.
+- **Remote bots** are included only through Desktop connections (see [Bot configuration](#bot-configuration)).
 - No telemetry, self-update or credentials. Untrusted card/session titles, tool arguments and review
   references are clipped and escaped before rendering. The UI runs in a scripts-only sandboxed iframe;
   page-local drafts and dismissals are not browser storage.
@@ -297,6 +353,17 @@ alone does not reload them. When the installed and loaded manifest versions diff
 
 > Pixel HQ &lt;installed&gt; is installed but &lt;loaded&gt; is still running — restart the Hermes gateway
 > (`hermes gateway restart`) to finish the update.
+
+**Update available.** When Hermes reports a newer catalog version (or an update target) for Pixel HQ, the
+header shows an **Update available** button. It opens a panel with the installed and the available version
+(and short commit ids), two steps — update in Hermes (Capabilities → Plugins) or run
+`hermes plugins update pixel-hq`, then restart the gateway — and an **Open Plugins** button where the Desktop
+app supports navigation. **Esc** or **Close** closes the panel. The plugin never updates itself. In every
+other state the footer keeps one quiet line, for example “Update check: up to date (catalog 1.3.0)” or
+“Update check: not available for this installation” (also for installs that are not from the catalog and have
+no update target); a failed check is a footer line, never a pop-up. Hermes runs its own update check
+(default every 24 hours); the page asks at load and at most every 6 hours. The standalone page has no
+update notice.
 
 Settings and roster files live outside the plugin checkout and survive updates. See
 [`CHANGELOG.md`](CHANGELOG.md) for version history and verification limits.

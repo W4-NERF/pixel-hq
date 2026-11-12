@@ -1,4 +1,4 @@
-"""Pixel HQ backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action,review,roster}.
+"""Pixel HQ backend: /api/plugins/pixel-hq/{snapshot,live,page,blocker/action,review,roster,soul-history}.
 
 Collector and UI live in ``<repo>/pixelhq``; the plugin folder is usually a symlink into the repo, hence
 ``resolve()``. The whole ``pixelhq`` directory is loaded exactly once, when this file is imported, as the
@@ -14,11 +14,13 @@ from __future__ import annotations
 import asyncio
 import importlib
 import importlib.util
+import json
 import sys
 import time
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 
 def _loader():
@@ -107,3 +109,46 @@ async def roster(body: dict):
         if result.get("ok"):
             _cache["data"] = None
     return result
+
+
+SOUL_BODY_LIMIT = 512 * 1024  # a 64 KiB SOUL plus JSON escaping fits well below this
+
+
+def _refused(exc) -> JSONResponse:
+    """Handled refusals carry a short message only: no path, no request value, never a 500 for bad input."""
+    return JSONResponse({"ok": False, "message": exc.message}, status_code=exc.status)
+
+
+async def _soul_call(function, *args):
+    history = _module("soul_history")
+    try:
+        cfg = _module("collect").cfgmod.load()
+        return await asyncio.to_thread(function, *args, cfg)
+    except history.HistoryError as exc:
+        return _refused(exc)
+
+
+@router.post("/soul-history")
+async def soul_history_save(request: Request):
+    """Back up the previous SOUL (pixelhq/soul_history.py); the body never chooses a path."""
+    history = _module("soul_history")
+    raw = await request.body()
+    if len(raw) > SOUL_BODY_LIMIT:
+        return _refused(history.HistoryError("body: too large."))
+    try:
+        body = json.loads(raw)
+    except (ValueError, RecursionError):  # malformed, not UTF-8, or nested too deeply
+        return _refused(history.HistoryError("body: expected JSON."))
+    return await _soul_call(history.save, body)
+
+
+@router.get("/soul-history")
+async def soul_history_list(bot: str = "", sourceKey: str = ""):
+    history = _module("soul_history")
+    return await _soul_call(lambda cfg: history.list_versions(bot, sourceKey, cfg))
+
+
+@router.get("/soul-history/item")
+async def soul_history_item(bot: str = "", sourceKey: str = "", id: str = ""):
+    history = _module("soul_history")
+    return await _soul_call(lambda cfg: history.item(bot, sourceKey, id, cfg))

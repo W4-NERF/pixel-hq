@@ -118,7 +118,7 @@ def snapshot(seed: int = 7) -> dict:
     reactor = _reactor()
     return {"generated": now, "bots": bots, "reactor": reactor, "events": events[:40], "blockers": blockers, "boardErrors": [], "warnings": [],
             "unassigned": {}, "cfg": cfgmod.public(cfg, roster) | {"toolsDir": "<pixel-hq>/pixelhq"}, "collectMs": 12, "demo": True,
-            "live": {"generated": now, "ms": 3, "bots": live, "unassignedTasks": {}}}
+            "live": {"generated": now, "ms": 3, "bots": live, "unassignedTasks": {}}, "demoProfiles": _demo_profiles(roster)}
 
 
 # The Office floor shows members / active / blocked / average HP / XP per department. Whatever the seed draws, these bots are
@@ -146,6 +146,31 @@ def _pin_floor_numbers(bots: list, blockers: list, live: dict, now: float) -> No
                              "actions": ALLOWED["technical"], "remote": False})
         b.update(openQuests=len(b["quests"]), quest=b["quests"][0]["title"] if b["quests"] else "")
     _mark_stale_session(live, now)
+
+
+SKILL_POOL = ["web-search", "file-ops", "code-review", "summarise", "shell-safe", "diff-reader", "docs-writer", "log-triage",
+              "metrics-query", "backup-check", "tls-audit", "port-scan", "dns-tools", "git-flow", "test-runner", "release-notes"]
+MESSAGING_SECTION = ("## Messaging other agents\n\nUse the message tool to ask a teammate for help. Keep requests short and name the "
+                     "card they concern.\n")
+
+
+def _demo_profiles(roster: dict) -> dict:
+    """Synthetic ``profiles.describe`` answers for the standalone demo (read-only panel; no real profile is read)."""
+    out = {}
+    for i, bot in enumerate(roster["bots"]):
+        leader = bool(bot.get("leader"))  # the leader shows the "+N more" collapse: 13 of 16 skills are switched off
+        skills = [{"name": name, "enabled": k < 3 if leader else (k + i) % 5 != 3}
+                  for k, name in enumerate(SKILL_POOL[: 16 if leader else 4 + i % 4])]
+        soul = (f"You are {bot['id']}, a sample {bot['cls']} bot.\n\n## Working style\n\n- Check the facts before you answer.\n"
+                "- Report what you did, with evidence.\n- Ask one clear question when something is unclear.\n")
+        toolsets = [{"name": name, "enabled": k != 2 or i % 2 == 0} for k, name in enumerate(["files", "terminal", "web"])]
+        servers = [{"name": "docs", "transport": "stdio", "enabled": True}, {"name": "tickets", "transport": "http", "enabled": i % 2 == 0}]
+        out[bot["id"]] = {
+            "name": bot["id"], "description": f"{bot['cls']} (synthetic demo profile)",
+            "soul": soul + ("\n" + MESSAGING_SECTION if i % 2 == 0 else ""),
+            "model": {"provider": "sample-provider", "default": ["local/llm-34b", "vendor/model-large"][i % 2]},
+            "skills": skills, "toolsets": toolsets, "toolsets_pinned": i % 3 == 0, "mcp_servers": servers[: 1 + i % 2]}
+    return out
 
 
 def _stable_number(text: str) -> int:

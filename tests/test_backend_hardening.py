@@ -108,7 +108,7 @@ def test_two_entry_points_racing_share_one_package_and_one_loader(tmp_path):
     report = json.loads(result.stdout)
     print(f"{report['good']}/{report['runs']} same package, {report['modules']} modules")
     assert report["failures"] == []
-    assert (report["good"], report["runs"], report["modules"]) == (50, 50, 14)
+    assert (report["good"], report["runs"], report["modules"]) == (50, 50, 15)
 
 
 READY_MARKER = '''

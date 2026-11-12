@@ -89,6 +89,13 @@ class Element {
     const box = this.rect || (document.layout && document.layout(this)) || {left: 0, top: 0, width: 0, height: 0};
     return {...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top};
   }
+  /* Like Element.replaceWith for one node: the node takes this element's place (it is detached from its old parent first). */
+  replaceWith(node) {
+    const parent = this.parentNode;
+    if (node.parentNode) node.parentNode.children = node.parentNode.children.filter(other => other !== node);
+    parent.children = parent.children.map(child => child === this ? node : child);
+    node.parentNode = parent; this.parentNode = null;
+  }
   setPointerCapture() {} // no-op in the model: pointer events go to the document listeners and to `onpointer…` handlers
   releasePointerCapture() {}
   hasPointerCapture() { return false; }

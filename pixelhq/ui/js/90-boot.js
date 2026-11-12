@@ -35,6 +35,7 @@ document.querySelectorAll('th[data-k]').forEach((th) =>
 function renderAll() {
   applyAppearance();
   hud();
+  updateTick();
   renderRosterPeriodic();
   office();
   board();
@@ -77,6 +78,9 @@ window.addEventListener('message', (e) => {
   }
   if (m.pixelhqRosterResult) {
     onRosterResult(m.pixelhqRosterResult);
+    return;
+  }
+  if (onConfigMessage(m)) {
     return;
   }
   if (m.pixelhqLive) {

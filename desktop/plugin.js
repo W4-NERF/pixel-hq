@@ -293,8 +293,390 @@ function replyReload(ctx, post, refresh) {
     .catch(err => post({ pixelhqError: restartHint(errText(err)) }))
 }
 
+/* ---------- Bot configuration (round 4): profile describe, safe SOUL save, SOUL history, update check ----------
+ * Data only: the frame asks, the host answers with …Result messages that carry the request id. Profile data comes from
+ * Hermes' own profile-editor RPC (profiles.describe / profiles.configure), never from profile files. The frame never names a
+ * method or a path; every field is checked here before the first host call. Nothing in this block submits a prompt. */
+const RID_RE = /^[0-9a-f]{16,32}$/
+const HASH_RE = /^[0-9a-f]{64}$/
+const SOURCE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+// Version id rule, one copy per language (same pattern, same character class and length): this one, CONF_VERSION_ID in
+// pixelhq/ui/js/39-soul-history.js and FILE_RE in pixelhq/soul_history.py. tests/test_soul_history_contract.py keeps them equal.
+const VERSION_ID_RE = /^\d{8}T\d{6}Z-[a-z0-9]{8,32}\.md$/
+const SOUL_MAX_BYTES = 64 * 1024
+const SOUL_CONTROL_RE = /[\u0000-\u0008\u000b-\u001f]/
+const LONE_SURROGATE_RE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/
+const ENTRY_MAX = 2000
+const HISTORY_MAX = 50
+const UPDATE_TTL_MS = 6 * 60 * 60 * 1000
+const SAVE_KEEP_MS = 10 * 60 * 1000
+const SAVE_KEEP_COUNT = 20
+
+/* The save has no unreachable/ambiguous state: both mean nothing was written. */
+const saveState = state => state === 'unreachable' || state === 'ambiguous' ? 'error' : state
+const PLUGINS_PATH = '/capabilities?tab=plugins'
+const MSG_NO_EDITOR = 'This Hermes version has no profile editor API'
+const MSG_UNREACHABLE = 'Not reachable from this Desktop'
+const MSG_AMBIGUOUS = 'More than one Desktop connection offers this bot; nothing was called'
+const MSG_CONFLICT = 'The SOUL changed since you opened it. Reload to see the current version.'
+const MSG_UNVERIFIED = 'Saved, but the read-back differs'
+const MSG_BACKUP = 'Backup of the current SOUL failed, nothing was written: '
+const UNKNOWN_METHOD_RE = /unknown method|method not found|-32601/i
+
+class BridgeFailure extends Error {
+  constructor(state, message) {
+    super(message)
+    this.state = state
+  }
+}
+const failure = (state, message) => new BridgeFailure(state, message)
+const isUnknownMethod = error => UNKNOWN_METHOD_RE.test(errText(error)) || (error && error.code === -32601)
+const rpcFailure = error => error instanceof BridgeFailure ? error
+  : isUnknownMethod(error) ? failure('unsupported', MSG_NO_EDITOR) : failure('error', errText(error))
+
+async function sha256Hex(text) {
+  const subtle = globalThis.crypto && globalThis.crypto.subtle
+  if (!subtle) throw failure('unsupported', NOT_SUPPORTED)
+  const digest = await subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+/* Where a bot lives: local (active gateway) or exactly one registered Desktop connection (§1 routing). */
+async function remoteRoute(bot) {
+  if (typeof host.profileRoutes !== 'function' || typeof host.requestProfile !== 'function') throw failure('unsupported', MSG_NO_EDITOR)
+  let routes
+  try {
+    routes = await host.profileRoutes()
+  } catch (error) { throw failure('error', errText(error)) }
+  const found = (Array.isArray(routes) ? routes : []).filter(r => plainObject(r) && (r.profile === bot || r.targetProfile === bot))
+  if (!found.length) throw failure('unreachable', MSG_UNREACHABLE)
+  if (found.length > 1) throw failure('ambiguous', MSG_AMBIGUOUS)
+  const route = found[0]
+  const name = typeof route.targetProfile === 'string' && route.targetProfile !== '' ? route.targetProfile : route.profile
+  if (typeof route.connectionId !== 'string' || !SOURCE_RE.test(route.connectionId)) {
+    throw failure('error', 'The connection id is not usable')
+  }
+  if (typeof name !== 'string' || !PROFILE_RE.test(name)) throw failure('error', 'The remote profile name is not usable')
+  return { sourceKey: route.connectionId, name, route }
+}
+
+const sourceFor = (bot, remote) => remote ? remoteRoute(bot) : Promise.resolve({ sourceKey: 'local', name: bot, route: null })
+
+function callerFor(source) {
+  if (!source.route) {
+    if (typeof host.request !== 'function') throw failure('unsupported', MSG_NO_EDITOR)
+    return (method, params) => host.request(method, params)
+  }
+  // Saves and the re-reads around them are user actions: dial the remote backend at foreground priority.
+  return (method, params) => host.requestProfile(source.route, method, params, undefined, { spawnPriority: 'foreground' })
+}
+
+const clip = (value, max) => typeof value === 'string' ? value.slice(0, max) : ''
+const entries = (value, pick) => (Array.isArray(value) ? value : []).slice(0, ENTRY_MAX).filter(plainObject).map(pick)
+
+/* Only the fields the panel shows survive, with bounded types; the UI escapes them. */
+function describeFields(raw) {
+  if (!plainObject(raw) || (raw.soul !== undefined && typeof raw.soul !== 'string')) throw failure('error', 'Unexpected profile answer')
+  const model = plainObject(raw.model) ? raw.model : {}
+  const named = e => ({ name: clip(e.name, 128), enabled: e.enabled !== false })
+  return {
+    name: clip(raw.name, 64),
+    description: clip(raw.description, 2000),
+    soul: raw.soul || '',
+    model: { provider: clip(model.provider, 128), default: clip(model.default, 128) },
+    skills: entries(raw.skills, named),
+    toolsets: entries(raw.toolsets, named),
+    toolsets_pinned: raw.toolsets_pinned === true,
+    mcp_servers: entries(raw.mcp_servers, e => ({ ...named(e), transport: clip(e.transport, 32) }))
+  }
+}
+
+async function describeSoul(call, source) {
+  let raw
+  try {
+    raw = await call('profiles.describe', { name: source.name })
+  } catch (error) { throw rpcFailure(error) }
+  const fields = describeFields(raw)
+  return { ...fields, soulHash: await sha256Hex(fields.soul), sourceKey: source.sourceKey }
+}
+
+function parseRequest(body) {
+  if (!plainObject(body)) throw failure('error', 'Invalid request')
+  if (typeof body.rid !== 'string' || !RID_RE.test(body.rid)) throw failure('error', 'Invalid request id')
+  if (!validJumpId(body.bot, PROFILE_RE)) throw failure('error', 'Invalid profile')
+  if (typeof body.remote !== 'boolean') throw failure('error', 'Invalid request')
+  return { rid: body.rid, bot: body.bot, remote: body.remote }
+}
+
+/* The history key is derived by the backend from the bot id: refuse here what it would refuse. */
+function historyRequest(body) {
+  const request = parseRequest(body)
+  if (!SOURCE_RE.test(request.bot)) throw failure('error', 'This bot id cannot be used for the SOUL history')
+  return request
+}
+
+async function runProfile(body) {
+  const request = parseRequest(body)
+  const source = await sourceFor(request.bot, request.remote)
+  return { state: 'ready', data: await describeSoul(callerFor(source), source) }
+}
+
+/* ---- Save protocol (§3): re-read, backup, write, read-back — in this order, one request id ---- */
+function soulDraft(value) {
+  if (typeof value !== 'string') throw failure('error', 'The SOUL text must be a string')
+  if (value.length > SOUL_MAX_BYTES) throw failure('error', 'The SOUL is longer than 64 KiB')
+  const text = value.replace(/\r\n?/g, '\n')
+  if (SOUL_CONTROL_RE.test(text)) throw failure('error', 'The SOUL contains control characters other than tab and line breaks')
+  if (LONE_SURROGATE_RE.test(text)) throw failure('error', 'The SOUL is not valid Unicode text')
+  if (new TextEncoder().encode(text).length > SOUL_MAX_BYTES) throw failure('error', 'The SOUL is longer than 64 KiB')
+  return text
+}
+
+function saveRequest(body) {
+  const request = historyRequest(body)
+  if (typeof body.baseHash !== 'string' || !HASH_RE.test(body.baseHash)) throw failure('error', 'Invalid base hash')
+  return { ...request, baseHash: body.baseHash, draft: soulDraft(body.soul) }
+}
+
+async function backupSoul(ctx, request, source, text) {
+  const body = { bot: request.bot, sourceKey: source.sourceKey, text, rid: request.rid }
+  let result
+  try {
+    result = await ctx.rest('/soul-history', { method: 'POST', body })
+  } catch (error) { throw failure('failed', MSG_BACKUP + restartHint(errText(error))) }
+  if (!plainObject(result) || result.ok !== true) throw failure('failed', MSG_BACKUP + clip(result && result.message, 200))
+}
+
+async function writeSoul(call, source, draft) {
+  let result
+  try {
+    result = await call('profiles.configure', { name: source.name, soul: draft })
+  } catch (error) {
+    const reason = rpcFailure(error)
+    throw reason.state === 'unsupported' ? reason : failure('failed', 'The SOUL was not written: ' + reason.message)
+  }
+  if (!plainObject(result) || result.ok !== true || !plainObject(result.applied) || result.applied.soul !== true) {
+    throw failure('failed', 'The SOUL was not written: the profile editor did not apply it')
+  }
+}
+
+async function readBack(call, source, draft) {
+  const wanted = await sha256Hex(draft)
+  let after
+  try {
+    after = await describeSoul(call, source)
+  } catch (error) { return { state: 'unverified', message: 'Saved, but the read-back failed: ' + error.message } }
+  return after.soulHash === wanted ? { state: 'saved', message: 'SOUL saved.', soulHash: after.soulHash }
+    : { state: 'unverified', message: MSG_UNVERIFIED, soulHash: after.soulHash }
+}
+
+async function saveSteps(ctx, request, source, call) {
+  const before = await describeSoul(call, source)
+  if (before.soulHash !== request.baseHash) return { state: 'conflict', message: MSG_CONFLICT, soulHash: before.soulHash }
+  await backupSoul(ctx, request, source, before.soul)
+  await writeSoul(call, source, request.draft)
+  return readBack(call, source, request.draft)
+}
+
+/* `started.value` turns true once the steps run (the lock is held): only such results are final answers worth keeping. */
+async function runSave(ctx, body, saving, started) {
+  const request = saveRequest(body)
+  if (typeof ctx.rest !== 'function') throw failure('unsupported', NOT_SUPPORTED)
+  const source = await sourceFor(request.bot, request.remote)
+  const call = callerFor(source)
+  const lock = source.sourceKey + '/' + request.bot
+  if (saving.has(lock)) throw failure('error', 'A save for this bot is already running')
+  saving.add(lock)
+  started.value = true
+  try {
+    return await saveSteps(ctx, request, source, call)
+  } finally { saving.delete(lock) }
+}
+
+/* One save, one final answer (R4-D2): a repeat of a request id that is still running gets no reply of its own (the running
+   save answers once); a repeat after the end gets the kept final answer again, without a new host call. */
+function makeSaveFlow(ctx, now) {
+  const saving = new Set()
+  const flying = new Set()
+  const done = new Map()
+  const kept = rid => {
+    const hit = done.get(rid)
+    if (hit && now() >= hit.at && now() - hit.at < SAVE_KEEP_MS) return hit.message
+    done.delete(rid)
+    return null
+  }
+  const remember = (rid, message) => {
+    done.set(rid, { at: now(), message })
+    for (const old of [...done.keys()].slice(0, Math.max(0, done.size - SAVE_KEEP_COUNT))) done.delete(old)
+  }
+  const finish = (rid, started, message, post) => {
+    const out = { rid, ...message }
+    if (rid) {
+      flying.delete(rid)
+      if (started.value) remember(rid, out)
+    }
+    post({ pixelhqSoulSaveResult: out })
+  }
+  return (body, post) => {
+    const rid = plainObject(body) && typeof body.rid === 'string' && RID_RE.test(body.rid) ? body.rid : null
+    const hit = rid ? kept(rid) : null
+    if (hit) {
+      post({ pixelhqSoulSaveResult: hit })
+      return
+    }
+    if (rid && flying.has(rid)) return
+    if (rid) flying.add(rid)
+    const started = { value: false }
+    Promise.resolve().then(() => runSave(ctx, body, saving, started)).then(
+      result => finish(rid, started, result, post),
+      error => {
+        const reason = rpcFailure(error)
+        finish(rid, started, { state: saveState(reason.state), message: reason.message }, post)
+      }
+    )
+  }
+}
+
+/* ---- SOUL history: the two read routes of the backend; a restore is an ordinary save of the chosen text ---- */
+const historyQuery = (bot, source) => 'bot=' + encodeURIComponent(bot) + '&sourceKey=' + encodeURIComponent(source.sourceKey)
+
+async function historyGet(ctx, path) {
+  if (typeof ctx.rest !== 'function') throw failure('unsupported', NOT_SUPPORTED)
+  try {
+    return await ctx.rest(path)
+  } catch (error) { throw failure('error', restartHint(errText(error))) }
+}
+
+const historyRow = row => ({ id: row.id, savedAt: clip(row.savedAt, 32), bytes: Number.isInteger(row.bytes) ? row.bytes : 0,
+  firstLine: clip(row.firstLine, 80) })
+
+async function runHistory(ctx, body) {
+  const request = historyRequest(body)
+  const source = await sourceFor(request.bot, request.remote)
+  const rows = await historyGet(ctx, '/soul-history?' + historyQuery(request.bot, source))
+  if (!Array.isArray(rows)) throw failure('error', 'Unexpected history answer')
+  const items = rows.filter(r => plainObject(r) && typeof r.id === 'string' && VERSION_ID_RE.test(r.id)).slice(0, HISTORY_MAX)
+  return { state: 'ready', items: items.map(historyRow) }
+}
+
+async function runHistoryItem(ctx, body) {
+  const request = historyRequest(body)
+  if (typeof body.id !== 'string' || !VERSION_ID_RE.test(body.id)) throw failure('error', 'Invalid version id')
+  const source = await sourceFor(request.bot, request.remote)
+  const path = '/soul-history/item?' + historyQuery(request.bot, source) + '&id=' + encodeURIComponent(body.id)
+  const reply = await historyGet(ctx, path)
+  if (!plainObject(reply) || typeof reply.text !== 'string') throw failure('error', 'Unexpected history answer')
+  return { state: 'ready', id: body.id, text: reply.text }
+}
+
+/* ---- Update check (§5): Hermes' own plugin list, at most one call per 6 h ---- */
+const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/
+const SHA_RE = /^[0-9a-f]{7,64}$/i
+const versionOf = value => typeof value === 'string' && VERSION_RE.test(value) ? value : null
+const shaOf = value => typeof value === 'string' && SHA_RE.test(value) ? value : null
+const NO_VERSION = { version: null, sha: null }
+
+/* `update_target` is named by the spec but not by the contract snapshot: an object carries version/sha, a bare string is a sha
+   only when it is hex without dots, otherwise a version. */
+function targetOf(value) {
+  if (plainObject(value)) return { version: versionOf(value.version), sha: shaOf(value.sha) }
+  if (typeof value !== 'string' || value === '') return NO_VERSION
+  return SHA_RE.test(value) ? { version: null, sha: value } : { version: versionOf(value), sha: null }
+}
+
+const pluginRow = rows => rows.find(r => plainObject(r) && r.key === ID) || rows.find(r => plainObject(r) && r.name === ID) || null
+const unavailable = (message, installed = NO_VERSION) => ({ state: 'unavailable', installed, message })
+
+function updateState(row) {
+  if (!row) return unavailable('Pixel HQ is not in the Hermes plugin list')
+  const installed = { version: versionOf(row.version), sha: shaOf(row.installed_sha) }
+  const catalog = typeof row.catalog_name === 'string' && row.catalog_name !== ''
+  const target = targetOf(row.update_target)
+  const latest = { version: versionOf(row.catalog_version), sha: shaOf(row.catalog_sha) }
+  if (row.update_available === true && (catalog || target.version || target.sha)) {
+    return { state: 'available', installed, available: { version: latest.version || target.version, sha: latest.sha || target.sha } }
+  }
+  if (row.update_available === false && catalog) {
+    return { state: 'current', installed, ...(latest.version ? { available: latest } : {}) }
+  }
+  return unavailable('Update check is not available for this installation', installed)
+}
+
+/* Every outcome is kept for 6 h per plugin process, errors and a host without the method included (R4-D6). */
+async function readUpdateInfo() {
+  if (typeof host.request !== 'function') return unavailable(NOT_SUPPORTED)
+  let reply
+  try {
+    reply = await host.request('plugins.manage', { action: 'list' })
+  } catch (error) {
+    return isUnknownMethod(error) ? unavailable(NOT_SUPPORTED) : { state: 'error', message: errText(error) }
+  }
+  if (!plainObject(reply) || !Array.isArray(reply.plugins)) return { state: 'error', message: 'Unexpected plugin list answer' }
+  return updateState(pluginRow(reply.plugins))
+}
+
+function makeUpdateCheck(now) {
+  let cached = null
+  let pending = null
+  const fresh = () => cached !== null && now() >= cached.at && now() - cached.at < UPDATE_TTL_MS
+  return () => {
+    if (fresh()) return Promise.resolve(cached.result)
+    if (!pending) {
+      pending = readUpdateInfo().then(result => {
+        cached = { at: now(), result }
+        return result
+      }).finally(() => { pending = null })
+    }
+    return pending
+  }
+}
+
+/* The frame cannot navigate: it asks, this bridge opens the one fixed route (never a path from the frame) when the host has `navigate`. */
+function openPlugins() {
+  if (typeof host.navigate !== 'function') return
+  try {
+    Promise.resolve(host.navigate(PLUGINS_PATH)).catch(() => {})
+  } catch (error) { /* the page stays as it is; there is nothing to report */ }
+}
+
+/* One answer per request: `work` resolves to the result fields or throws; a failure becomes {state, message}. */
+function answer(post, key, body, work, mapState = state => state) {
+  const rid = plainObject(body) && typeof body.rid === 'string' && RID_RE.test(body.rid) ? body.rid : null
+  Promise.resolve().then(() => work(body)).then(
+    result => post({ [key]: { rid, ...result } }),
+    error => {
+      const reason = rpcFailure(error)
+      post({ [key]: { rid, state: mapState(reason.state), message: reason.message } })
+    }
+  )
+}
+
+function makeConfigBridge(ctx, now) {
+  const saveFlow = makeSaveFlow(ctx, now)
+  const checkUpdates = makeUpdateCheck(now)
+  const updateWork = body => {
+    if (!plainObject(body) || typeof body.rid !== 'string' || !RID_RE.test(body.rid)) throw failure('error', 'Invalid request id')
+    // The flag is not cached: it describes the running host, not the plugin list.
+    return checkUpdates().then(result => ({ ...result, canNavigate: typeof host.navigate === 'function' }))
+  }
+  return function handle(m, post) {
+    if (!plainObject(m)) return
+    if (Object.hasOwn(m, 'pixelhqProfile')) answer(post, 'pixelhqProfileResult', m.pixelhqProfile, runProfile)
+    if (Object.hasOwn(m, 'pixelhqSoulSave')) saveFlow(m.pixelhqSoulSave, post)
+    if (Object.hasOwn(m, 'pixelhqSoulHistory')) {
+      answer(post, 'pixelhqSoulHistoryResult', m.pixelhqSoulHistory, body => runHistory(ctx, body))
+    }
+    if (Object.hasOwn(m, 'pixelhqSoulHistoryItem')) {
+      answer(post, 'pixelhqSoulHistoryItemResult', m.pixelhqSoulHistoryItem, body => runHistoryItem(ctx, body))
+    }
+    if (Object.hasOwn(m, 'pixelhqUpdateInfo')) answer(post, 'pixelhqUpdateInfoResult', m.pixelhqUpdateInfo, updateWork)
+    if (m.pixelhqOpenPlugins === true) openPlugins()
+  }
+}
+
 function makePage(ctx, deps = {}) {
   const wait = deps.wait || defaultWait
+  const config = makeConfigBridge(ctx, deps.now || Date.now)
   return function PixelHqPage() {
     // Hook order stays constant: the SDK either provides useTheme for the whole load or not at all.
     const hostTheme = useHostTheme ? useHostTheme() : null
@@ -346,6 +728,7 @@ function makePage(ctx, deps = {}) {
         if (m.pixelhqReview) replyReview(ctx, m.pixelhqReview, post, refresh)
         if (m.pixelhqTriage) replyTriage(m.pixelhqTriage, cfg, snap.data, post)
         if (m.pixelhqReload) replyReload(ctx, post, refresh)
+        config(m, post)
       }
       window.addEventListener('message', onMsg)
       return () => window.removeEventListener('message', onMsg)

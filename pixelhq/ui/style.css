@@ -88,6 +88,10 @@ tr:hover td{background:var(--bg2);cursor:pointer}.rk{font:14px var(--px);color:v
 .banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 24px;font-size:12px;color:var(--fg);background:var(--card);border-bottom:2px solid var(--amber)}
 .banner button{flex:none}
 .foot{padding:8px 24px 16px;font-size:10px;color:var(--mut)}
+.upd-foot{padding-top:0}.upd-foot:empty{display:none}
+button.upd-btn{border-color:var(--amber);color:var(--amber)}button.upd-btn:focus-visible,.upd button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.upd{padding:10px 24px 12px;font-size:12px;color:var(--fg);background:var(--card);border-bottom:2px solid var(--amber)}
+.upd .kv{margin:6px 0}.upd-steps{margin:6px 0 6px 18px}.upd code{font:inherit;color:var(--amber)}
 /* live */
 #live{grid-template-columns:1fr;gap:8px;padding:16px 24px}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:12px;align-items:start}
@@ -194,3 +198,21 @@ button.armed{border-color:var(--amber);color:var(--amber)}
 button[data-act="archive"]{color:var(--archive)}
 .res{font-size:11px;margin-top:4px}.res.ok{color:var(--olive)}.res.bad{color:var(--rust)}
 #bres .res{border-left:3px solid var(--line);padding:2px 8px;margin:2px 0}#bres .res.ok{border-left-color:var(--olive)}#bres .res.bad{border-left-color:var(--rust)}
+/* config section of the character card */
+.cfg{margin-top:4px;font-size:11px;overflow-wrap:anywhere}
+.cfg-sec{margin:12px 0 4px}
+.cfg-toggle{font:10px var(--px);letter-spacing:.14em;color:var(--mut2);background:var(--clear);border:0;padding:0;text-align:left}
+.cfg-toggle:hover{color:var(--fg)}
+.cfg .lab{font-size:10px;letter-spacing:.14em;color:var(--mut);margin:8px 0 2px}
+.cfg .hint{font-size:10px;margin-top:4px}
+.cfg .lnk{background:var(--clear);border:0;padding:0 2px;color:var(--mut2);text-decoration:underline;font-size:inherit}
+.cfg .res.warn{color:var(--amber)}
+.cfg textarea.ta{font-size:11px;line-height:1.4;min-height:120px;white-space:pre-wrap}
+.cfg .diff{border:1px solid var(--line);background:var(--bg);max-height:320px;overflow:auto;margin:4px 0}
+.cfg .dl{font-size:11px;line-height:1.4;min-height:1.4em;white-space:pre-wrap;overflow-wrap:anywhere;padding:0 4px;border-left:3px solid var(--clear)}
+.cfg .dl.add{border-left-color:var(--olive);color:var(--olive)}.cfg .dl.del{border-left-color:var(--rust);color:var(--rust)}
+.cfg .dl.skip{color:var(--mut);font-size:10px}
+.cfg .dm{display:inline-block;width:1.4em;flex:none}
+.hrow{display:flex;gap:8px;align-items:center;padding:2px 0;border-bottom:1px solid var(--row-line);font-size:11px}
+.hrow .hfirst{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cfg :focus-visible{outline:2px solid var(--olive);outline-offset:2px}

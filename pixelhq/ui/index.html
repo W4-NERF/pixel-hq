@@ -6,7 +6,11 @@
 <div class="banner" id="stale-banner" role="status" style="display:none"><span id="stale-text"></span><button type="button" id="stale-dismiss">Dismiss</button></div>
 <header class="hdr"><div class="l"><span class="px" style="font-size:20px" id="brand">PIXEL HQ</span>
 <span><button class="on" data-tab="office">Office</button> <button data-tab="live" id="livetab">Live</button> <button data-tab="board">Leaderboard</button> <button data-tab="blk" id="blktab">Blocked</button> <button data-tab="roster" id="rostertab" style="display:none">Roster</button></span></div>
-<div style="display:flex;gap:8px;align-items:center"><span class="tag" id="stand"></span><button id="reload">Reload</button></div></header>
+<div style="display:flex;gap:8px;align-items:center"><button type="button" id="update-btn" class="upd-btn" aria-expanded="false" aria-controls="update-panel" style="display:none">Update available</button><span class="tag" id="stand"></span><button id="reload">Reload</button></div></header>
+<div class="upd" id="update-panel" role="region" aria-labelledby="update-title" tabindex="-1" style="display:none"><div class="px" id="update-title">PIXEL HQ UPDATE AVAILABLE</div>
+<div class="kv"><span class="mut">Installed</span><span id="update-installed"></span><span class="mut">Available</span><span id="update-latest"></span></div>
+<ol class="upd-steps"><li>Update in Hermes (Capabilities → Plugins) or run <code>hermes plugins update pixel-hq</code></li><li>Then restart the gateway</li></ol>
+<div class="acts"><button type="button" id="update-open" style="display:none">Open Plugins</button><button type="button" id="update-close">Close</button></div></div>
 <div class="hud" id="hud"></div>
 
 <section class="view on" id="office"><div>
@@ -40,6 +44,7 @@
 </section>
 <section class="view" id="roster"><div class="layout-bar" id="roster-bar"></div><div id="roster-editor"></div></section>
 <div class="foot" id="foot"></div>
+<div class="foot upd-foot" id="update-foot"></div>
 <div class="drag-ghost" id="drag-ghost" aria-hidden="true"></div>
 
 <script>

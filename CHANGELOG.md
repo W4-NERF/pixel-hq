@@ -4,6 +4,60 @@ All notable changes to Pixel HQ are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version dates below come from git history;
 verification limits are stated separately from implemented changes.
 
+## [1.3.0] - 2026-11-12
+
+### Added
+
+- **Config** section on every character card (collapsed by default): read-only profile facts — model pin,
+  description, skills, toolsets, MCP servers — read through Hermes' own `profiles.describe`, with **Reload**.
+  Raw `config.yaml`, `.env`, `auth.json` and memory files are not shown.
+- **SOUL editor** with a line-diff preview and a second confirming click (**Preview changes** → **Confirm
+  save**), a 64 KiB limit with inline messages, a warning when the Bot Mode `## Messaging other agents`
+  section is removed, and a save that re-reads, backs up, writes through `profiles.configure` and reads back
+  (results: saved, read-back differs, conflict, not written, error, unsupported). One save gives one final
+  answer: a retry with the same request id joins the running save or gets the kept answer (last 20, 10 minutes,
+  no second write), a late answer after the page's timeout is still applied, and a reply of the profile read
+  never replaces the editor you are typing in (the draft is kept; the next preview diffs against the new version).
+- **SOUL history**: the previous SOUL is stored before every write under `plugin-data/pixel-hq/soul-history/`
+  (newest 10 per bot, mode 0600, atomic writes, one file per request id named with the time and the full id; the
+  `soul-history/` directories and files must not be symlinks), listed in the backend's newest-first order with
+  **Preview** and **Confirm restore**.
+  New backend routes `GET /soul-history`, `GET /soul-history/item` and `POST /soul-history`.
+- Bots on other hosts are included when the Desktop app has exactly one connection to them; otherwise the
+  card says “Not reachable from this Desktop” (or that more than one connection offers the bot).
+- **Update available** button in the header with an info panel (installed and available version, the two update
+  steps, **Open Plugins** where the Desktop supports navigation, **Esc** closes) and a quiet footer line in
+  every other state. The plugin list is read through `plugins.manage`, at page load and at most every 6 hours (every
+  outcome, an error or a missing method included, is kept for those 6 hours);
+  the plugin never updates itself. Nothing of this appears on the standalone page.
+- Synthetic profile data in the demo snapshot so the standalone demo shows a filled, read-only Config section.
+
+### Changed
+
+- README: new “Bot configuration” section; “What it reads and writes” and “Updating” describe the profile
+  calls, the SOUL writes, the history directory and the update check.
+- `plugin.yaml` version is 1.3.0; `requires_hermes` stays `>=0.22.2`. The three Hermes calls used
+  (`profiles.describe`, `profiles.configure`, `plugins.manage`) are checked at run time: a Hermes version
+  without them gives the “no profile editor API” state or “not available” footer line instead of an error.
+
+### Verification
+
+- Offline test suite: 2090 Python tests, including the Node DOM harness and the bridge tests with a simulated
+  Desktop host: the SOUL history store and its routes, the four save steps in order with conflict, backup
+  failure, `applied.soul` false, read-back mismatch and timeouts, local and remote routing, the diff algorithm,
+  the Config panel states, the editor and history flows, the update-notice states and the 6-hour cadence on a
+  fake clock. An independent review added ten executable probes; all pass. A contract test runs the version ids
+  the backend lists through the bridge and the page.
+- By hand in Chromium, with the real `desktop/plugin.js` and the page in a `sandbox="allow-scripts"` iframe
+  against a simulated Hermes host: edit, preview (with the Bot Mode section warning) and save, the call order
+  re-read, backup, write, read-back, typing while snapshots and theme messages arrive (focus and caret kept),
+  a conflict that writes nothing, Reload that keeps the draft, history and restore, a remote bot through a
+  Desktop route and without one, the update panel with **Open Plugins** and **Esc**, and the standalone page.
+- `requires_hermes` checked against the Hermes release tags: `profiles.describe`, `profiles.configure` and the
+  `update_available` field of `plugins.manage` exist in 0.22.2; `update_target` appears in 0.22.3.
+- **Not verified:** a run against a real Hermes gateway, the Desktop app, a real remote connection or the plugin
+  catalog; touch input; Windows and macOS.
+
 ## [1.2.0] - 2026-11-10
 
 ### Added
