@@ -88,8 +88,8 @@ summon XP. Without `parent`, helper ids beginning with `subagent`, `delegate_tas
 | Neither | Unknown attributes, not invented scores. |
 
 A review is one JSON object per line, with required `agent` and `verdict` (`pass`, `revise` or `fail`),
-optional `dims` (the four scores, 1–5), `parent`, `reviewer`, `source`, `ts` and `ref`. Missing ledgers are
-fine; malformed lines produce warnings and unknown verdicts are skipped. Configure an existing ledger
+optional `dims` (the four scores, 1–5), `parent`, `reviewer`, `source`, `ts` and `ref` (field reference:
+[`docs/ledger.md`](docs/ledger.md)). Missing ledgers are fine; malformed lines produce warnings and unknown verdicts are skipped. Configure an existing ledger
 with `legacy_ledger_path`; it remains read-only.
 
 ## The views
@@ -383,8 +383,10 @@ Settings and roster files live outside the plugin checkout and survive updates. 
 
 ## Development
 
-Python 3 with pytest, PyYAML, FastAPI and httpx, plus Node, is needed for the offline tests. The UI is plain
-HTML/CSS/JS, inlined by `page.py` with no build step. To link a checkout for Desktop development:
+Python 3.11+ and Node 22+ are needed for the offline tests; `python3 -m pip install -r requirements-dev.txt`
+installs pytest, PyYAML, FastAPI, httpx and Ruff. The UI is plain HTML/CSS/JS, inlined by `page.py` with no
+build step. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for conventions and the checks CI runs. To link a
+checkout for Desktop development:
 
 ```bash
 ln -s ~/src/pixel-hq ~/.hermes/plugins/pixel-hq
@@ -398,15 +400,18 @@ restart. Use a writable disk-backed `TMPDIR` with enough space; include your sup
 and repository root in `PYTHONPATH` if needed. From the repository root:
 
 ```bash
+python3 -m ruff check .
 python3 -m pytest -q --basetemp="$TMPDIR/bt-pixel-hq"
 python3 tools/jscheck.py
+python3 tools/jslint.py
 python3 tools/funclen.py
 python3 tools/contrast.py
 python3 tools/settings_table.py
 python3 pixelhq/render.py --demo
 ```
 
-`jscheck.py` runs Node syntax checks; `funclen.py` rejects Python functions over 80 physical lines;
+`jscheck.py` runs Node syntax checks; `jslint.py` limits UI line and function length; `funclen.py` rejects
+Python functions over 80 physical lines;
 `contrast.py` checks both palettes. `settings_table.py` prints the table between the README's
 `settings-table` markers; paste its output there after editing the manifest. The README regression test
 fails on drift. The demo command writes `dist/pixel-hq.html` with `"demo": true`; open that file locally
