@@ -16,7 +16,6 @@ except ImportError:  # Windows has no fcntl: appends still use one O_APPEND writ
 
 from .config import ledger_path
 
-
 DIMS = {"correctness", "completeness", "format", "safety"}
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._+-]{1,64}$")
 RID_RE = re.compile(r"^[0-9a-f]{16,32}$")  # request id of one UI review draft (retries reuse it)

@@ -123,7 +123,8 @@ def test_text_length_boundaries_are_accepted(action_case, action, text):
     ("retry", "technical", "", ["unblock", "--reason",
      "[Pixel HQ · sample-operator] retry (from Pixel HQ)", "t_abcdef12"]),
     ("comment", "upstream", "Keep 'quotes'; $(sample) as text",
-     ["comment", "--author", "sample-operator (Pixel HQ)", "t_abcdef12", "Keep 'quotes'; $(sample) as text"]),
+     ["comment", "--author", "sample-operator (Pixel HQ)", "--", "t_abcdef12", "Keep 'quotes'; $(sample) as text"]),
+    ("comment", "upstream", "--help", ["comment", "--author", "sample-operator (Pixel HQ)", "--", "t_abcdef12", "--help"]),
     ("archive", "stale", "", ["archive", "t_abcdef12"]),
 ])
 def test_allowed_actions_use_exact_cli_argv(action_case, action, category, text, suffix):
@@ -207,3 +208,40 @@ def test_cli_failures_cannot_report_success(action_case, monkeypatch, failure):
     assert result["ok"] is False and result["after"] == "blocked"
     entry = json.loads(case.module.LOG.read_text(encoding="utf-8"))
     assert entry["ok"] is False
+
+
+def _hermes_comment_parser():
+    """Same shape as ``hermes kanban comment`` (argparse: task_id, text nargs="+", --author, --max-len)."""
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="comment", add_help=True, exit_on_error=False)
+    parser.add_argument("task_id")
+    parser.add_argument("text", nargs="+")
+    parser.add_argument("--author", default=None)
+    parser.add_argument("--max-len", type=int, default=None)
+    return parser
+
+
+@pytest.mark.parametrize("text", ["--help", "--author=Someone else", "--max-len=3 trimmed", "-vv"])
+def test_comment_text_that_looks_like_an_option_stays_the_comment_body(action_case, text):
+    case = action_case
+    case.state["cat"] = "upstream"
+    result = case.module.run(case.body | {"action": "comment", "text": text})
+    assert result["ok"] is True
+    argv = case.calls[0][0]
+    parsed = _hermes_comment_parser().parse_args(argv[argv.index("comment") + 1:])
+    assert parsed.task_id == case.tid
+    assert parsed.text == [text]
+    assert parsed.author == "sample-operator (Pixel HQ)" and parsed.max_len is None
+
+
+def test_audit_log_failure_after_the_cli_ran_still_reports_the_result(action_case, monkeypatch):
+    case = action_case
+    def unwritable(entry):
+        raise PermissionError("Sample read-only checkout")
+    monkeypatch.setattr(case.module, "_log", unwritable)
+    result = case.module.run(case.body)
+    assert result["ok"] is True and result["after"] == "ready"
+    assert len(case.calls) == 1
+    assert any("audit log" in warning for warning in result["warnings"])
+    assert "Sample read-only checkout" not in json.dumps(result)

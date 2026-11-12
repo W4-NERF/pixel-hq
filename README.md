@@ -153,7 +153,7 @@ them. The table is generated from [`plugin.yaml`](plugin.yaml) by `python3 tools
 | `xp_fail` | `int` | `-5` | XP contribution for each failed review or failed Kanban outcome. |
 | `stale_days` | `int` | `14` | Number of blocked days after which a card is considered stale. |
 | `exclude_boards` | `list` | `[]` | Kanban board slugs excluded from all views and XP calculations. |
-| `needs_input_keywords` | `list` | `["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"]` | Case-insensitive keywords that classify blocked cards as waiting for operator input. |
+| `needs_input_keywords` | `list` | `["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"]` | Case-insensitive whole words or phrases that classify blocked cards as waiting for operator input. |
 | `prometheus_url` | `str` | `""` | Prometheus base URL for reactor metrics, or empty to disable metric requests. |
 | `metrics_prefix` | `str` | `"vllm"` | Serving metric family prefix used in Prometheus queries. |
 | `model_endpoint` | `str` | `""` | OpenAI-compatible base URL for model discovery, or empty to disable model requests. |

@@ -73,7 +73,9 @@ async def blocker_action(body: dict):
     """Action on a blocked card (logic in pixelhq/actions.py; writes only through the kanban CLI)."""
     result = await asyncio.to_thread(_module("actions").run, body or {})
     if result.get("ok"):
-        _cache["data"] = None  # next snapshot is fresh
+        # Under the lock: a snapshot collected while the CLI ran must not be cached as fresh afterwards.
+        async with _lock:
+            _cache["data"] = None
     return result
 
 
@@ -132,6 +134,10 @@ async def _soul_call(function, *args):
 async def soul_history_save(request: Request):
     """Back up the previous SOUL (pixelhq/soul_history.py); the body never chooses a path."""
     history = _module("soul_history")
+    # Like the ``body: dict`` routes, accept JSON only: a text/plain POST needs no CORS preflight.
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if media_type != "application/json" and not media_type.endswith("+json"):
+        return _refused(history.HistoryError("body: expected application/json.", 415))
     raw = await request.body()
     if len(raw) > SOUL_BODY_LIMIT:
         return _refused(history.HistoryError("body: too large."))

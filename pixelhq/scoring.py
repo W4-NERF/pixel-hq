@@ -236,7 +236,7 @@ def review_events(reviews: list[dict], cfg) -> list[dict]:
 
 def compute(bots: list[str], kanban: KanbanIndex, reviews: list[dict], cfg) -> dict[str, Score]:
     weights = {v: cfg.get("xp_" + v, cfg.get("xp", {}).get(v, default))
-               for v, default in zip(VERDICTS, (10, 3, -5))}
+               for v, default in zip(VERDICTS, (10, 3, -5), strict=True)}
 
     def raw_xp(counts):
         return sum(weights[v] * counts.get(v, 0) for v in VERDICTS)

@@ -74,3 +74,32 @@ def test_review_io_failure_keeps_the_cache(app, fleet):
             assert response.status_code == 200 and response.json()["ok"] is False
             assert api._cache["data"] is original
     asyncio.run(scenario())
+
+
+def test_a_blocker_action_during_a_snapshot_leaves_no_stale_cache(app, monkeypatch):
+    """The snapshot that was collecting while the CLI ran must not be served afterwards as fresh data."""
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow_collect():
+        started.set()
+        release.wait(5)
+        return {"collected": "before the action"}
+
+    monkeypatch.setattr(api._module("collect"), "collect", slow_collect)
+    monkeypatch.setattr(api._module("actions"), "run", lambda body: {"ok": True})
+
+    async def scenario():
+        snapshot = asyncio.create_task(api.snapshot(max_age=30))
+        while not started.is_set():
+            await asyncio.sleep(0.01)
+        action = asyncio.create_task(api.blocker_action({"board": "platform"}))
+        for _ in range(20):  # let the action's worker thread finish while the snapshot still collects
+            await asyncio.sleep(0.01)
+        release.set()
+        assert (await snapshot) == {"collected": "before the action"}
+        assert (await action)["ok"] is True
+        assert api._cache["data"] is None
+
+    asyncio.run(scenario())

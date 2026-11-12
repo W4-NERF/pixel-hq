@@ -72,7 +72,7 @@ config_schema:
   needs_input_keywords:
     type: list
     default: ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"]
-    description: "Case-insensitive keywords that classify blocked cards as waiting for operator input."
+    description: "Case-insensitive whole words or phrases that classify blocked cards as waiting for operator input."
   prometheus_url:
     type: str
     default: ""

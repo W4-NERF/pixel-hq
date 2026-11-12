@@ -251,3 +251,18 @@ def test_demo_uses_flat_weights_for_buckets_and_sources(monkeypatch):
             source: raw([counts[v] for v in ("pass", "revise", "fail")])
             for source, counts in bot["bySource"].items()
         }
+
+
+@pytest.mark.parametrize("value", [5, None, "", "   ", ["sample"], {"path": "sample"}, True])
+def test_a_malformed_hermes_home_falls_back_to_the_root_home(config_files, value):
+    (config_files / "config.json").write_text(json.dumps({"hermes_home": value}), encoding="utf-8")
+    cfg = config.load()
+    assert cfg["hermes_home"] == str(config_files.parent.parent)
+    assert "hermes_home: expected a path" in cfg["warnings"]
+
+
+def test_a_valid_hermes_home_override_is_kept(config_files, tmp_path):
+    (config_files / "config.json").write_text(json.dumps({"hermes_home": str(tmp_path / "other")}), encoding="utf-8")
+    cfg = config.load()
+    assert cfg["hermes_home"] == str(tmp_path / "other")
+    assert not any(w.startswith("hermes_home") for w in cfg["warnings"])

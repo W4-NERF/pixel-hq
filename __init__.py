@@ -7,7 +7,6 @@ import os
 import sys
 from pathlib import Path
 
-
 REVIEW_DESCRIPTION = "Record a quality review for a bot or helper in the Pixel HQ review ledger."
 REVIEW_SCHEMA = {
     "name": "pixelhq_review",
