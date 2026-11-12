@@ -234,6 +234,25 @@ assert.equal(sel, 'dev-a');
 """)
 
 
+def test_a_drop_without_a_following_click_does_not_swallow_the_next_desk_click(tmp_path):
+    """A drop re-renders the floor, so the browser sends no click; the block must end with the pointerup's task."""
+    run_floor(tmp_path, """
+const tasks = [];
+hostClock.later = fn => tasks.push(fn);
+const nextTask = () => tasks.splice(0).forEach(fn => fn());
+toggle();
+sel = 'default';
+const [rx, ry] = mid(desk('dev-a'));
+grab('sysadmin'); pointer.move(rx, ry); pointer.up(rx, ry);
+assert.equal(draftBot('sysadmin').zone, 'lab');
+nextTask();
+toggle();
+const [x, y] = mid(desk('dev-a'));
+pointer.click(x, y);
+assert.equal(sel, 'dev-a', 'the first click after the drop selects');
+""")
+
+
 def test_pointer_events_on_the_controls_of_a_desk_do_not_start_a_drag(tmp_path):
     run_floor(tmp_path, """
 toggle();

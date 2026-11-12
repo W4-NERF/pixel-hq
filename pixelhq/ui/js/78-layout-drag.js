@@ -109,6 +109,11 @@ function dragUp(e) {
     drag = null;
     return;
   }
+  // The click that follows this pointerup (if the browser sends one) is still swallowed; a drop that re-renders the floor
+  // gets no click at all, so the block must not outlive this event and eat the next real desk click.
+  hostClock.later(() => {
+    dragClickBlock = false;
+  }, 0);
   const target = dragZoneAt(e.clientX, e.clientY);
   const was = dragEnd();
   if (target) {

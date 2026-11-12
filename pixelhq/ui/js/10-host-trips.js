@@ -37,13 +37,23 @@ function hostTrips(limitMs, onExpire) {
     forget: (key) => done.delete(key),
     expire() {
       const now = hostClock.now();
+      let next = Infinity;
       for (const [key, trip] of [...open]) {
+        if (now < trip.at) {
+          trip.at = now; // the wall clock stepped back: restart the window instead of never expiring
+        }
         if (now - trip.at >= limitMs) {
           open.delete(key);
           late.set(key, trip);
           done.set(key, { ok: false, message: TIMEOUT_TEXT });
           onExpire(key, trip.info);
+        } else {
+          next = Math.min(next, limitMs - (now - trip.at));
         }
+      }
+      // A trip that is not due yet (clock change, timer fired early) is checked again when its time is up.
+      if (next !== Infinity) {
+        hostClock.later(trips.expire, next);
       }
     }
   };

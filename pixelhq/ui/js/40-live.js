@@ -30,7 +30,7 @@ function sessHtml(s, now, sub, agent) {
     s.toolCalls + ' tools',
     kt(s.inTok + s.outTok) + ' tok',
     s.cost != null
-      ? s.cost.toLocaleString(CFG().locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $'
+      ? s.cost.toLocaleString(LOCALE(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $'
       : null,
     s.model || null
   ].filter(Boolean).join(' · ');
@@ -114,6 +114,7 @@ function liveRender() {
   try {
     hud();
     office();
+    board(); // the leaderboard's STATUS column follows the live data like the Office floor
     liveTab();
   } catch (e) {
     setStand('live render error: ' + e);
