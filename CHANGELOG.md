@@ -4,7 +4,7 @@ All notable changes to Pixel HQ are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version dates below come from git history;
 verification limits are stated separately from implemented changes.
 
-## [Unreleased]
+## [1.3.1] - 2026-11-12
 
 ### Fixed
 
@@ -49,8 +49,15 @@ verification limits are stated separately from implemented changes.
 - Offline test suite: 2154 Python tests, including new regression tests for each fix above; each was checked to fail
   without its fix. The standalone page was rendered in Chromium with a hostile card title.
 - The Kanban comment change was checked against the argument parser of `hermes kanban comment` in Hermes 0.19.0
-  (argparse, `text nargs="+"`).
-- **Not verified:** a real Hermes gateway, the Desktop app, Windows and macOS beyond the CI demo render.
+  (argparse, `text nargs="+"`), and with the real CLI of Hermes 0.23.1 on a sandbox board: `--help` and
+  `--author=…` are stored as the comment text.
+- By hand in Chromium, with the real `desktop/plugin.js` and the page in a `sandbox="allow-scripts"` iframe against a
+  simulated Hermes host: an invalid `locale` and `timezone`, the first desk click after a drag and drop, a roster
+  save whose answer arrives after the page's timeout (timeout line, then the late result; the request id is not
+  sent to the backend), **Reload** with an unchanged snapshot, the SOUL save flow, and hostile card titles on the
+  standalone page (rendered as text).
+- **Not verified:** a real Hermes gateway and the Desktop app with this version; Windows and macOS beyond the CI demo
+  render.
 
 ## [1.3.0] - 2026-11-12
 

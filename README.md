@@ -34,7 +34,7 @@ any profile that should see it: `hermes -p <profile> plugins enable pixel-hq`.
 ## Platforms
 
 Versions reach the plugin catalog through a reviewed SHA-bump PR, so the catalog can lag behind this
-repository. As of **2026-11-12** the catalog lists **1.1.2**; 1.3.0 has been submitted.
+repository. As of **2026-11-12** the catalog lists **1.3.0**; 1.3.1 has been submitted.
 
 | Platform | Status |
 |---|---|

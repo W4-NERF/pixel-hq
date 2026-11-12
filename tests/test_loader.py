@@ -69,7 +69,7 @@ def test_loading_both_entry_points_twice_keeps_names_and_sys_path_clean(tmp_path
 
 
 UPDATE_UNDER_RUNNING_BACKEND = '''
-import asyncio, importlib.util, json, sys
+import asyncio, importlib.util, json, re, sys
 from pathlib import Path
 copy, mode = Path(sys.argv[1]), sys.argv[2]
 spec = importlib.util.spec_from_file_location("api_copy", copy / "dashboard" / "plugin_api.py")
@@ -85,7 +85,9 @@ def update_files_on_disk():
             text = text.replace("reviews_path", "reviews_file")
         path.write_text(text, encoding="utf-8")
     manifest = copy / "plugin.yaml"
-    manifest.write_text(manifest.read_text(encoding="utf-8").replace("version: 1.3.0", "version: 9.9.9"), encoding="utf-8")
+    # any released version: the update writes a version this process has never loaded
+    manifest.write_text(re.sub(r"^version: .*$", "version: 9.9.9", manifest.read_text(encoding="utf-8"), count=1, flags=re.M),
+                        encoding="utf-8")
 
 async def main():
     first = await api.snapshot()
@@ -162,9 +164,10 @@ def test_sys_path_is_only_touched_inside_the_main_guard():
 
 def test_manifest_version_and_loaded_version_agree_on_disk():
     manifest = (ROOT / "plugin.yaml").read_text(encoding="utf-8")
-    assert re.search(r"^version: 1\.3\.0$", manifest, re.M)
+    declared = re.search(r"^version: (\d+\.\d+\.\d+)$", manifest, re.M)
+    assert declared, "plugin.yaml must declare a plain x.y.z version"
     assert "provides_middleware" not in manifest
-    assert config.disk_version() == config.LOADED_VERSION == "1.3.0"
+    assert config.disk_version() == config.LOADED_VERSION == declared.group(1)
 
 
 def test_disk_version_is_read_on_every_call_and_loaded_version_is_not(tmp_path, monkeypatch):
