@@ -23,7 +23,7 @@ def luminance(color: str) -> float:
     channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
     linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
               for value in channels]
-    return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
+    return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear, strict=True))
 
 
 def contrast(foreground: str, background: str) -> float:

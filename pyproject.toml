@@ -1,0 +1,41 @@
+# Tool configuration only. Pixel HQ is a Hermes plugin, installed from this repository by
+# `hermes plugins install`; it is not a pip-installable package, so there is no [project] table.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 140  # same limit as tools/jslint.py for the UI sources
+extend-exclude = ["docs/video/node_modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "B",    # flake8-bugbear
+    "I",    # isort
+    "UP",   # pyupgrade
+    "PLE",  # pylint errors
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # typographic characters (—, ×, “ ”) in UI and README text are intended
+    "RUF005",                      # list concatenation is as clear as unpacking for the short argv lists here
+    "UP017",                       # datetime.timezone.utc is used consistently; datetime.UTC is only an alias
+    "UP031",                       # %-formatting embeds JS probes, whose braces would need escaping in f-strings
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "E501",  # long JS probes and expected strings
+    "F811",  # pytest fixtures imported from tests.fixtures and requested by parameter name
+]
+"pixelhq/demo.py" = ["E501"]  # synthetic data tables
+
+[tool.ruff.lint.isort]
+known-first-party = ["pixelhq", "tests", "tools"]

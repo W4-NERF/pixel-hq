@@ -8,9 +8,9 @@ import sys
 import time
 from pathlib import Path
 
-from tests.test_scoring_collect import collector
-
 import pytest
+
+from tests.test_scoring_collect import collector
 
 
 def live_reader(fleet, monkeypatch, module):

@@ -3,8 +3,8 @@
 Executed in the plain-Node DOM model. `hostClock.now` is replaced by a fake clock and the harness collects timers in
 `timers` instead of running them, so nothing sleeps: a test advances `now` and fires the collected timers by hand.
 """
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 

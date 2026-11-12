@@ -241,8 +241,9 @@ def test_demo_uses_flat_weights_for_buckets_and_sources(monkeypatch):
     snapshot = demo.snapshot(seed=6)
     assert snapshot["cfg"]["xp"] == {"pass": 17, "revise": 4, "fail": -8}
     for bot in snapshot["bots"]:
-        raw = lambda counts: sum(count * weights["xp_" + verdict]
-                                 for verdict, count in zip(("pass", "revise", "fail"), counts))
+        def raw(counts):
+            return sum(count * weights["xp_" + verdict]
+                       for verdict, count in zip(("pass", "revise", "fail"), counts, strict=True))
         assert bot["xpOwn"] == max(0, raw(bot["own"]))
         assert bot["xpSummon"] == max(0, raw(bot["summ"]))
         assert bot["xp"] == bot["xpOwn"] + bot["xpSummon"]

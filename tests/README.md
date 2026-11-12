@@ -1,6 +1,6 @@
 # Test suite
-Run from the repository root with Python 3, pytest, PyYAML, FastAPI, httpx and Node installed.
-Set `PYTHONPATH` to include the supplied Python toolchain (if needed) and the repository root.
+Run from the repository root with Python 3.11+, Node 22+ and `requirements-dev.txt` installed.
+`pyproject.toml` puts the repository root on `sys.path`; add a supplied Python toolchain to `PYTHONPATH` if needed.
 Choose a writable disk-backed `TMPDIR`, then run `pytest -q --basetemp=$TMPDIR/bt`.
 If no pytest launcher is installed, use `python3 -m pytest` with the same arguments.
 Run `python3 tools/jscheck.py`, `python3 tools/jslint.py` (line and function length of the UI sources) and

@@ -1,7 +1,7 @@
 """Roster editor interactions, exact bridge payloads, pending guards and reset confirmation."""
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 

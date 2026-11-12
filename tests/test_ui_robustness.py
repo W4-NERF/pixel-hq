@@ -5,7 +5,6 @@ import pytest
 
 from tests.test_review_ui import run_ui
 
-
 PAYLOAD = '\"><img src=x onerror="sample()">&\''
 
 

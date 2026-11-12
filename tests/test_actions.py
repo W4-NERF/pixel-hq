@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 ALLOWED = {
     "you": {"answer", "comment", "archive"},
     "technical": {"retry", "comment", "archive"},

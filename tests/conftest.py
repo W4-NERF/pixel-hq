@@ -1,9 +1,9 @@
 """Shared offline guards; individual tests replace external boundaries explicitly."""
 import os
-from pathlib import Path
 import socket
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 

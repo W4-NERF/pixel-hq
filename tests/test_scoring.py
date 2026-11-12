@@ -201,9 +201,9 @@ def test_reviews_add_to_kanban_and_self_reviews_are_excluded(fleet):
     fleet.events("platform", "ops-bot", ["claimed"] * 3 + ["completed"] * 3)
     reviews = [
         {"agent": "ops-bot", "verdict": "pass", "reviewer": "operator", "source": "ui",
-         "dims": dict(zip(("correctness", "completeness", "format", "safety"), (4, 3, 2, 1)))},
+         "dims": dict(zip(("correctness", "completeness", "format", "safety"), (4, 3, 2, 1), strict=True))},
         {"agent": "subagent", "parent": "ops-bot", "verdict": "revise", "reviewer": "operator", "source": "tool",
-         "dims": dict(zip(("correctness", "completeness", "format", "safety"), (2, 5, 4, 3)))},
+         "dims": dict(zip(("correctness", "completeness", "format", "safety"), (2, 5, 4, 3), strict=True))},
         {"agent": "ops-bot", "verdict": "fail", "reviewer": "ops-bot",
          "dims": dict.fromkeys(("correctness", "completeness", "format", "safety"), 1)},
         {"agent": "unlisted-bot", "verdict": "pass"},

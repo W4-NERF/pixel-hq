@@ -7,8 +7,8 @@ calling the drop function. Save payloads are compared with the roster the operat
 backend validator. Invented names only; no browser was used.
 """
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 

@@ -29,7 +29,7 @@ def test_css_has_exactly_two_palettes_with_all_colors_behind_custom_properties()
     for mode, expected in (("dark", DARK), ("light", LIGHT)):
         assert {name: palettes[mode][name] for name in expected} == expected
     assert set(palettes["dark"]) - {"px"} == set(palettes["light"]) - {"px"}
-    for block, line in zip(blocks, ("rgba(206,220,235,0.14)", "rgba(23,32,42,.16)")):
+    for block, line in zip(blocks, ("rgba(206,220,235,0.14)", "rgba(23,32,42,.16)"), strict=True):
         assert f"--line:{line}" in block[0]
     defined = set(palettes["dark"]) | {"side"}
     assert set(re.findall(r"var\(--([\w-]+)", outside)) <= defined

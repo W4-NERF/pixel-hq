@@ -40,7 +40,7 @@ def test_demo_reports_signed_raw_source_xp_without_distributing_bucket_floors():
         }
         assert bot["xpBySource"] == expected_sources
         for bucket, key in (("own", "xpOwn"), ("summ", "xpSummon")):
-            raw = sum(count * weights[verdict] for count, verdict in zip(bot[bucket], ("pass", "revise", "fail")))
+            raw = sum(count * weights[verdict] for count, verdict in zip(bot[bucket], ("pass", "revise", "fail"), strict=True))
             assert bot[key] == max(0, raw)
         assert bot["xp"] == bot["xpOwn"] + bot["xpSummon"]
 

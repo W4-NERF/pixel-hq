@@ -59,7 +59,7 @@ assert.deepEqual(ops.classes, ['m', 'a', 'b hot', 'h', 'x']);
 assert.deepEqual(zoneHead('lab').classes, ['m', 'a', 'b hot', 'h', 'x']);
 assert.deepEqual(zoneHead('command').classes, ['m', 'a', 'b', 'h', 'x'], 'no blocked card: no highlight');
 """)
-    rows = [line for line in out.splitlines() if line.startswith("ROWS:")][0]
+    rows = next(line for line in out.splitlines() if line.startswith("ROWS:"))
     assert rows == ("ROWS:" + '{"command":"1 · 1 · 0 · Ø 99% · 2.4k XP","ops":"4 · 1 · 1 · Ø 85% · 1.4k XP",'
                     '"lab":"2 · 1 · 1 · Ø 34% · 175 XP","quarantine":"1 · 1 · 0 · Ø 73% · 228 XP",'
                     '"remote":"1 · 0 · 0 · Ø 92% · 349 XP","hq":"8 · 4 · 2 · Ø 72% · 4.2k XP",'

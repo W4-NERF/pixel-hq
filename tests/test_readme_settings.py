@@ -1,8 +1,8 @@
 """Keep the documented settings in sync with the manifest-generated Markdown."""
 import json
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import yaml
 
@@ -21,7 +21,7 @@ def test_settings_tool_prints_all_manifest_keys_from_any_working_directory(tmp_p
     assert lines[:2] == ["| Key | Type | Default | Meaning |", "|---|---|---|---|"]
     assert len(lines) == len(schema) + 2
     assert result.stdout.endswith("\n")
-    for line, (key, entry) in zip(lines[2:], schema.items()):
+    for line, (key, entry) in zip(lines[2:], schema.items(), strict=True):
         default = json.dumps(entry["default"], ensure_ascii=False)
         assert line == f"| `{key}` | `{entry['type']}` | `{default}` | {entry['description']} |"
 
