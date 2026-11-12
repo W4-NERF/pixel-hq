@@ -22,6 +22,13 @@ NOW = 1800000000.0
     ("transient", {}, "Sample task", 20, None, "technical", "last comment: New sample note"),
     (None, {}, "Sample task", 14, None, "stale", "last comment: New sample note"),
     (None, {}, "Sample task", 13, None, "unknown", "last comment: New sample note"),
+    # Hermes releases a child once every parent is done or archived: an archived parent is not upstream work.
+    ("needs_input", {}, "Sample task", 20, "archived", "you",
+     "needs_input (question is in the comment/body, no reason text recorded)"),
+    # Keywords match whole words: "gate" is not in "Investigate", "go" not in "Django" or "good".
+    (None, {}, "Investigate a good Django fix", 3, None, "unknown", "last comment: New sample note"),
+    (None, {}, "Waiting for the go/no-go call", 3, None, "you",
+     "title mentions approval/decision/gate (no reason text recorded)"),
 ])
 def test_category_precedence_and_reason_fallbacks_remain_unchanged(
         fleet, monkeypatch, kind, payload, title, days, parent_status, category, reason):
@@ -46,7 +53,7 @@ def test_category_precedence_and_reason_fallbacks_remain_unchanged(
         "since": since, "recurrences": 2, "reason": reason, "body": "Sample\nbody",
         "comment": {"author": "operator", "text": "New sample note", "ts": since},
         "openParents": ([{"id": "t_parent", "title": "Sample parent", "status": parent_status}]
-                        if parent_status and parent_status != "done" else []),
+                        if parent_status not in (None, "done", "archived") else []),
         "actions": blockers.ALLOWED[category], "remote": True,
     }]
 
@@ -72,3 +79,18 @@ def test_unblocked_boards_do_not_query_missing_auxiliary_tables(fleet):
             for table in ("task_events", "task_comments", "task_links"):
                 con.execute(f"DROP TABLE {table}")
     assert blockers.read_blockers() == ([], [])
+
+
+@pytest.mark.parametrize("keywords, text, expected", [
+    (["go"], "Go / no-go decision", True),
+    (["go"], "good, Google, ago, category, algorithm", False),
+    (["gate"], "investigate, delegate, aggregate, navigate", False),
+    (["gate"], "Quality GATE", True),
+    (["sign-off"], "needs sign-off.", True),
+    (["waiting for"], "Waiting  for", False),
+    (["?"], "what?", True),
+    (["", "  "], "anything", False),
+    ([], "anything", False),
+])
+def test_needs_input_keywords_match_whole_words_and_phrases(keywords, text, expected):
+    assert bool(blockers.keyword_pattern(keywords).search(text)) is expected

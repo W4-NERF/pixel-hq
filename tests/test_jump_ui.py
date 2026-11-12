@@ -6,7 +6,6 @@ import pytest
 from pixelhq.demo import snapshot
 from tests.test_review_ui import run_ui
 
-
 SESSIONS = """
 const bot = DATA.bots[0];
 const session = {id:'sample-session', title:'Sample session', source:'desktop', startedAt:1, lastAt:2,

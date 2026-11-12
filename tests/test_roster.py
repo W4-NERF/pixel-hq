@@ -42,7 +42,7 @@ def test_file_roster_drops_ghost_adds_recruit_and_keeps_remote(fleet, monkeypatc
 def test_live_uses_the_same_ghost_recruit_and_remote_rules(fleet, monkeypatch):
     from pixelhq import live
 
-    module = collector(fleet, monkeypatch)
+    collector(fleet, monkeypatch)
     roster = config.load_roster()
     roster["bots"] = [bot for bot in roster["bots"] if bot["id"] != "ops-bot"]
     roster["bots"].append({"id": "missing-bot"})

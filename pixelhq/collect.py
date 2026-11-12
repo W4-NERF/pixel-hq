@@ -18,9 +18,11 @@ import collections
 import colorsys
 import contextlib
 import json
+import math
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -28,8 +30,11 @@ from pathlib import Path
 if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/collect.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     __package__ = "pixelhq"
-from . import config as cfgmod, dbutil, profiles as profilemod, scoring
-from .blockers import ALLOWED, read_blockers
+from . import config as cfgmod
+from . import dbutil, scoring
+from . import profiles as profilemod
+from .blockers import ALLOWED as ALLOWED  # re-exported: actions.py and demo.py read the policy from here
+from .blockers import read_blockers
 from .common import boards, clip, state_db
 
 ACTIVE_WINDOW_S = 10 * 60
@@ -85,26 +90,58 @@ def http_json(url: str, timeout: float = 4.0):
         return json.loads(r.read().decode())
 
 
-def prom(q: str, cfg: dict) -> list:
+def prom(q: str, cfg: dict, state: dict | None = None) -> list:
+    """Result vector of one instant query; ``[]`` on any error.
+
+    With ``state``, a connection failure (refused, unreachable, timed out) marks the server as down and the
+    remaining queries of that snapshot are skipped instead of each waiting for its own timeout.
+    """
     base = cfg["prometheus_url"].rstrip("/")
-    if not base:
+    if not base or (state is not None and state.get("down")):
         return []
     try:
         d = http_json(f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": q}))
-        return d.get("data", {}).get("result", [])
+        result = d.get("data", {}).get("result", [])
+        return result if isinstance(result, list) else []
+    except urllib.error.HTTPError:
+        return []  # the server answered: only this query failed
+    except OSError:
+        if state is not None:
+            state["down"] = True
+        return []
     except Exception:
         return []
+
+
+def _sample(result) -> float | None:
+    """The value of one Prometheus sample; None when missing, malformed, NaN or infinite.
+
+    Prometheus reports "NaN" for an idle server (0/0 ratios, empty histograms); such values are not valid JSON
+    and ``round()`` refuses them, so they must never reach the snapshot.
+    """
+    try:
+        value = float(result["value"][1])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _instance(result) -> str | None:
+    metric = result.get("metric") if isinstance(result, dict) else None
+    return metric.get("instance") if isinstance(metric, dict) else None
 
 
 def read_reactor(cfg: dict | None = None) -> dict | None:
     cfg = cfgmod.load() if cfg is None else cfg
     if not cfg["prometheus_url"] and not cfg["model_endpoint"]:
         return None
+    state: dict = {}
     nodes: dict[str, dict] = {}
-    for r in prom("avg by (instance)(DCGM_FI_DEV_GPU_UTIL)", cfg):
-        nodes.setdefault(r["metric"].get("instance"), {})["util"] = round(float(r["value"][1]))
-    for r in prom("avg by (instance)(DCGM_FI_DEV_POWER_USAGE)", cfg):
-        nodes.setdefault(r["metric"].get("instance"), {})["power"] = round(float(r["value"][1]))
+    for key, metric in (("util", "DCGM_FI_DEV_GPU_UTIL"), ("power", "DCGM_FI_DEV_POWER_USAGE")):
+        for r in prom(f"avg by (instance)({metric})", cfg, state):
+            value = _sample(r)
+            if value is not None:
+                nodes.setdefault(_instance(r), {})[key] = round(value)
     model = None
     if cfg["model_endpoint"]:
         try:
@@ -113,11 +150,8 @@ def read_reactor(cfg: dict | None = None) -> dict | None:
             pass
 
     def one(q: str):
-        r = prom(q, cfg)
-        try:
-            return float(r[0]["value"][1]) if r else None
-        except Exception:
-            return None
+        r = prom(q, cfg, state)
+        return _sample(r[0]) if r else None
 
     p = re.sub(r"[^a-zA-Z0-9_]", "", cfg["metrics_prefix"]) or "vllm"
     srv = {
@@ -132,15 +166,17 @@ def read_reactor(cfg: dict | None = None) -> dict | None:
         "pairStalled": one(f"max({p}:pair_stalled)"),
     }
     if srv["kv"] is None:
-        srv["kv"] = one(f"max({p}:kv_cache_usage_perc)") or one(f"max({p}:gpu_cache_usage_perc)")
+        srv["kv"] = one(f"max({p}:kv_cache_usage_perc)")
+    if srv["kv"] is None:  # 0.0 is a valid reading of an idle cache, so no `or` chain here
+        srv["kv"] = one(f"max({p}:gpu_cache_usage_perc)")
     if srv["kv"] is not None and srv["kv"] > 1:
         srv["kv"] = srv["kv"] / 100
     if srv["specAccept"] is None:
         srv["specAccept"] = one(f"sum(rate({p}:spec_decode_num_accepted_tokens_total[15m])) / "
                                 f"sum(rate({p}:spec_decode_num_draft_tokens_total[15m]))")
     alias = cfg["node_aliases"] or {}
-    return {"nodes": [{"id": alias.get(k, k), **v} for k, v in sorted(nodes.items())], "model": model,
-            "engine": p, "srv": srv if any(v is not None for v in srv.values()) else None}
+    return {"nodes": [{"id": alias.get(k, k), **v} for k, v in sorted(nodes.items(), key=lambda kv: str(kv[0]))],
+            "model": model, "engine": p, "srv": srv if any(v is not None for v in srv.values()) else None}
 
 
 # ---------------------------------------------------------------- assemble

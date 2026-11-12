@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from pixelhq import collect, config, roster
-from tests.test_roster_ui import run_roster
 from tests.test_roster_save import body  # noqa: F401
+from tests.test_roster_ui import run_roster
 
 ROOT = Path(__file__).resolve().parents[1]
 

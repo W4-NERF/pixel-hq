@@ -1,0 +1,11 @@
+# Normalise line endings: the plugin is installed on Linux, macOS and Windows from this repository,
+# and the embedded page, README table check and JS gates expect LF.
+* text=auto eol=lf
+
+*.png binary
+*.gif binary
+*.woff2 binary
+*.mp4 binary
+
+# Third-party licence texts are kept byte-for-byte as distributed.
+pixelhq/fonts/OFL-*.txt -text

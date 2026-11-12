@@ -17,7 +17,8 @@ from pathlib import Path
 if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/blockers.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     __package__ = "pixelhq"
-from . import config as cfgmod, dbutil
+from . import config as cfgmod
+from . import dbutil
 from .common import boards, clip
 
 # The action handler enforces the same category policy server-side.
@@ -28,6 +29,8 @@ ALLOWED = {
     "unknown": ["retry", "comment", "archive"],
     "upstream": ["comment"],
 }
+# Parent statuses that no longer hold a child back: Hermes promotes a child once every parent is done or archived.
+SETTLED_PARENT = frozenset(("done", "archived"))
 CAT_ORDER = {"you": 0, "technical": 1, "stale": 2, "unknown": 3, "upstream": 4}
 
 
@@ -59,10 +62,10 @@ def _blocked_rows(db: Path, board: str, errors: list[str]) -> tuple:
                                "1 ORDER BY id DESC", warnings=errors, source=board)
         links = dbutil.rows(con, "task_links", ["parent_id", "child_id"], warnings=errors, source=board)
     by_id = {task[0]: task for task in tasks}
-    for eid, tid, kind, payload, ts in events:
+    for _eid, tid, kind, payload, ts in events:
         if len(by_event[tid]) < 6:
             by_event[tid].append((kind, payload, ts))
-    for cid, tid, author, body, ts in comments:
+    for _cid, tid, author, body, ts in comments:
         by_comment.setdefault(tid, (author, body, ts))
     for parent, child in links:
         if parent in by_id:
@@ -71,11 +74,26 @@ def _blocked_rows(db: Path, board: str, errors: list[str]) -> tuple:
     return blocked, by_event, by_comment, by_parent
 
 
+def keyword_pattern(keywords) -> re.Pattern:
+    """Case-insensitive match of any keyword as a whole word or phrase.
+
+    "go" must not match "good" or "ago", nor "gate" match "investigate": a word character directly before or
+    after a keyword prevents the match. Blank keywords are ignored; without keywords nothing matches.
+    """
+    parts = []
+    for keyword in keywords:
+        keyword = keyword.strip()
+        if keyword:
+            parts.append((r"(?<!\w)" if re.match(r"\w", keyword) else "") + re.escape(keyword)
+                         + (r"(?!\w)" if re.search(r"\w$", keyword) else ""))
+    return re.compile("|".join(parts) or r"(?!x)x", re.I)
+
+
 def read_blockers(cfg: dict | None = None, roster: dict | None = None) -> tuple[list, list]:
     """Every blocked card on every board with reason, age, upstream cards and a category."""
     cfg = cfgmod.load() if cfg is None else cfg
     roster = cfgmod.load_roster() if roster is None else roster
-    user_re = re.compile("|".join(re.escape(k) for k in cfg["needs_input_keywords"]) or r"(?!x)x", re.I)
+    user_re = keyword_pattern(cfg["needs_input_keywords"])
     stale_days = cfg["stale_days"]
     remote = {bot["id"] for bot in roster["bots"] if bot.get("remote")}
     out, errors = [], []
@@ -83,7 +101,7 @@ def read_blockers(cfg: dict | None = None, roster: dict | None = None) -> tuple[
     for board, db in boards(cfg):
         try:
             blocked, by_event, by_comment, by_parent = _blocked_rows(db, board, errors)
-            for tid, title, body, assignee, created, kind, rec, status in blocked:
+            for tid, title, body, assignee, created, kind, rec, _status in blocked:
                 blocked_at, reason, actor, tech = None, "", "", False
                 for event_kind, payload, ts in by_event[tid]:
                     data = _payload(payload, errors, f"{board}/task_events")
@@ -100,7 +118,8 @@ def read_blockers(cfg: dict | None = None, roster: dict | None = None) -> tuple[
                             reason = f"{event_kind}: {data['error']}"
                 comment = by_comment.get(tid)
                 parents = by_parent[tid]
-                open_parents = [{"id": p[0], "title": clip(p[1], 70), "status": p[2]} for p in parents if p[2] != "done"]
+                open_parents = [{"id": p[0], "title": clip(p[1], 70), "status": p[2]} for p in parents
+                                if p[2] not in SETTLED_PARENT]
                 since = float(blocked_at or created or now)
                 age_d = int((now - since) // 86400)
                 hay = f"{title} {reason}"

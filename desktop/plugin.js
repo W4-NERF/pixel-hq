@@ -139,13 +139,21 @@ function triagePrompt(keys, selection, cfg) {
   ].join('\n\n')
 }
 
+/* The settings are free text: an invalid locale or time zone falls back instead of failing the triage run. */
+function stampOf(cfg) {
+  const options = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
+  for (const [locale, timeZone] of [[cfg.locale || 'en-GB', cfg.timezone || 'UTC'], ['en-GB', cfg.timezone || 'UTC']]) {
+    try {
+      return new Date().toLocaleString(locale, { ...options, timeZone })
+    } catch (error) { /* try the next fallback */ }
+  }
+  return new Date().toLocaleString('en-GB', { ...options, timeZone: 'UTC' })
+}
+
 async function startTriage(request, cfg, snapshot) {
   const { profile, keys, selection } = triagePlan(request, cfg, snapshot)
   const text = triagePrompt(keys, selection, cfg)
-  const stamp = new Date().toLocaleString(cfg.locale || 'en-GB', {
-    timeZone: cfg.timezone || 'UTC', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-  })
-  const title = 'Blocked-card triage ' + stamp
+  const title = 'Blocked-card triage ' + stampOf(cfg)
   const res = await host.request('session.create', { profile, title })
   const sid = res && res.stored_session_id
   const runtime = res && res.session_id
@@ -234,30 +242,35 @@ function replyJump(kind, body, post, wait) {
 async function replyRoster(ctx, body, post, updateSnapshot) {
   const reset = plainObject(body) && body.reset === true && !Object.hasOwn(body, 'roster')
   const save = plainObject(body) && plainObject(body.roster) && (!Object.hasOwn(body, 'reset') || body.reset === false)
+  // The request id only travels back to the page (which save an answer belongs to); the backend never sees it.
+  const rid = plainObject(body) && typeof body.rid === 'string' && RID_RE.test(body.rid) ? { rid: body.rid } : {}
+  const reply = result => post({ pixelhqRosterResult: { ...result, ...rid } })
   if (!reset && !save) {
-    post({ pixelhqRosterResult: { ok: false, message: 'Invalid roster request: expected roster or reset:true.' } })
+    reply({ ok: false, message: 'Invalid roster request: expected roster or reset:true.' })
     return
   }
   try {
     if (typeof ctx.rest !== 'function') throw new Error(NOT_SUPPORTED)
     const result = await ctx.rest('/roster', { method: 'POST', body: reset ? { reset: true } : { roster: body.roster } })
-    post({ pixelhqRosterResult: result })
+    reply(result)
     if (!result.ok) return
     // A saved roster remains saved even if fetching its fresh snapshot fails.
     try {
       const data = await ctx.rest('/snapshot?max_age=0')
       if (data) updateSnapshot(data)
     } catch (error) { post({ pixelhqError: restartHint(errText(error)) }) }
-  } catch (error) { post({ pixelhqRosterResult: { ok: false, message: restartHint(errText(error)) } }) }
+  } catch (error) { reply({ ok: false, message: restartHint(errText(error)) }) }
 }
 
 function replyAction(ctx, action, post, refresh) {
   ctx.rest('/blocker/action', { method: 'POST', body: action, timeoutMs: 60000 })
     .then(r => {
       post({ pixelhqActionResult: Object.assign({ board: action.board, id: action.id }, r) })
+      // A failed refresh must not turn an action that already ran into an apparent failure (and invite a second run).
       return ctx.rest('/snapshot?max_age=0')
+        .then(d => { if (d) refresh(d) })
+        .catch(err => post({ pixelhqError: restartHint(errText(err)) }))
     })
-    .then(d => { if (d) refresh(d) })
     .catch(err => post({
       pixelhqActionResult: { ok: false, error: restartHint(errText(err)), board: action.board, id: action.id }
     }))
@@ -289,7 +302,12 @@ function replyTriage(request, cfg, snapshot, post) {
 
 function replyReload(ctx, post, refresh) {
   ctx.rest('/snapshot?max_age=0')
-    .then(d => refresh(d))
+    .then(d => {
+      if (!d) return
+      refresh(d)
+      // Posted directly: an unchanged snapshot keeps the query data identical, so the effect would not post it again.
+      post({ pixelhq: d })
+    })
     .catch(err => post({ pixelhqError: restartHint(errText(err)) }))
 }
 

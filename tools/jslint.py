@@ -107,7 +107,7 @@ class Scanner:
             if ch == "\\":
                 self.advance(2)
                 continue
-            in_class = in_class and ch != "]" or ch == "["
+            in_class = (in_class and ch != "]") or ch == "["
             self.advance()
         self.advance()
         while self.peek().isalpha():

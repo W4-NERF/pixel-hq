@@ -18,7 +18,6 @@ from .profiles import root_home
 from .reviews import RID_RE
 from .roster import _irregular, _replace
 
-
 KEY_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")      # applied to bot and source after lower-casing
 # Version id rule, one copy per language: this one, VERSION_ID_RE in desktop/plugin.js and CONF_VERSION_ID in
 # pixelhq/ui/js/39-soul-history.js (tests/test_soul_history_contract.py keeps them equal).

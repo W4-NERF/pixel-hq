@@ -5,3 +5,19 @@ var/
 docs/video/node_modules/
 docs/video/*.mp4
 .qa/
+
+# Python / tooling caches
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Editors and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

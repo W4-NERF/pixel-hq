@@ -8,7 +8,6 @@ of the three copies fails this test instead of silently emptying the history aga
 import json
 import re
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 

@@ -17,7 +17,8 @@ from pathlib import Path
 if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/live.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     __package__ = "pixelhq"
-from . import config as cfgmod, dbutil, profiles
+from . import config as cfgmod
+from . import dbutil, profiles
 from .collect import roster_bots
 from .common import boards, clip, state_db
 
@@ -74,7 +75,7 @@ def read_sessions(bot: str, now: float, cfg: dict | None = None) -> dict:
                 "ORDER BY coalesce(last_activity_at, started_at) DESC LIMIT 12", (now - ACTIVE_S,),
                 warnings=out["warnings"], source=bot)
             for row in rows:
-                sid, title, source, started, last_at, desc, parent, itok, otok, cost, mc, tc, model, ended = row
+                sid, title, source, started, last_at, desc, parent, itok, otok, cost, mc, tc, model, _ended = row
                 la = last_at or started
                 tool = last_tool(con, sid, out["warnings"], bot)
                 step = clip(desc or "", 120, collapse_whitespace=True)
@@ -114,7 +115,7 @@ def read_running_tasks(now: float, warnings: list[str] | None = None, cfg: dict 
                 rows = dbutil.rows(con, "tasks", ["id", "title", "assignee", "started_at", "last_heartbeat_at",
                                                    "worker_pid", "status"], "status='running'",
                                    warnings=warnings, source=board)
-            for tid, title, assignee, started, hb, pid, status in rows:
+            for tid, title, assignee, started, hb, pid, _status in rows:
                 tasks.setdefault(assignee or "?", []).append({
                     "board": board, "id": tid, "title": clip(title, 90, collapse_whitespace=True),
                     "startedAt": float(started) if started else None,
@@ -142,7 +143,8 @@ def query(params: dict | None = None) -> dict:
             dbutil.warning(warnings, bid, s["error"])
         # nest sub-agents under their parent session (parent_session_id set or title "Subagent: …";
         # newer Hermes versions record them with the parent's source instead of source=subagent)
-        is_sub = lambda x: x["source"] == "subagent" or bool(x.get("parent")) or x["title"].startswith("Subagent:")
+        def is_sub(x):
+            return x["source"] == "subagent" or bool(x.get("parent")) or x["title"].startswith("Subagent:")
         subs = [x for x in s["active"] if is_sub(x)]
         mains = [x for x in s["active"] if not is_sub(x)]
         by_id = {x["id"]: x for x in mains}

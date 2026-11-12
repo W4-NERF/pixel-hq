@@ -3,8 +3,8 @@
 Executed in the plain-Node DOM model. `hostClock.now` is replaced by a fake clock and the harness collects timers in
 `timers` instead of running them, so nothing sleeps: a test advances `now` and fires the collected timers by hand.
 """
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 
@@ -128,7 +128,8 @@ def test_roster_reset_round_trip_also_times_out(tmp_path):
 tab('roster');
 const editor = document.getElementById('roster-editor');
 const reset = editor.querySelector('[data-roster-reset]'); reset.onclick(); reset.onclick();
-assert.deepEqual(messages.filter(m => m.pixelhqRoster).map(m => m.pixelhqRoster), [{reset:true}]);
+assert.deepEqual(messages.filter(m => m.pixelhqRoster).map(m => ({...m.pixelhqRoster, rid: typeof m.pixelhqRoster.rid})),
+  [{reset:true, rid:'string'}]);
 advance(20000);
 assert.equal(editor.querySelector('[data-roster-controls]').disabled, false);
 assert.ok(editor.innerHTML.includes(TIMEOUT));

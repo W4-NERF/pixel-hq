@@ -2,6 +2,6 @@
   "name": "pixel-hq",
   "label": "Pixel HQ",
   "description": "Gamified fleet view for Hermes Agent bots (office, character cards, live board, leaderboard, blocked-card triage).",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "api": "plugin_api.py"
 }

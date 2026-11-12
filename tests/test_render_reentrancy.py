@@ -114,7 +114,7 @@ pendingThenFocus(reset);
 reset.onclick(); assert.equal(posted('pixelhqRoster').length, 0, 'the first click only arms the button');
 reset.onclick();
 assert.equal(posted('pixelhqRoster').length, 1);
-assert.deepEqual(posted('pixelhqRoster')[0].pixelhqRoster, {reset:true});
+assert.deepEqual({...posted('pixelhqRoster')[0].pixelhqRoster, rid: undefined}, {reset:true, rid: undefined});
 """, iframe=True)
 
 

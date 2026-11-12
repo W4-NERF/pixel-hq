@@ -1,0 +1,7 @@
+# Development and test dependencies, pinned for reproducible CI runs (Dependabot keeps them current).
+# The plugin itself needs nothing beyond what Hermes provides (FastAPI and PyYAML come with the gateway).
+fastapi==0.162.5
+httpx==0.28.1
+pytest==9.2.0
+PyYAML==6.0.3
+ruff==0.17.4

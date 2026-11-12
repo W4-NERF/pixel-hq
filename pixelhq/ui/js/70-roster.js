@@ -287,20 +287,26 @@ function submitRoster(body) {
   if (!EMBED || rosterBusy()) {
     return;
   }
+  const rid = newRid();
   roundTrip(
     rosterTrips,
     'roster',
-    { saving: body.roster || null },
-    { pixelhqRoster: body },
+    { saving: body.roster || null, rid },
+    { pixelhqRoster: { ...body, rid } },
     onRosterResult,
     renderRoster
   );
 }
 
 /* The saved payload travels with the trip, so an answer after the UI timeout (D21) updates the base like an in-time one;
-   a draft edited since then is kept when it differs from what was saved. */
+   a draft edited since then is kept when it differs from what was saved. The request id ties an answer to its save: a late
+   answer of an earlier save must not finish a newer one (a bridge without ids sends none and is matched as before). */
 function onRosterResult(result) {
   if (!result || typeof result.ok !== 'boolean' || !rosterTrips.waiting().length) {
+    return;
+  }
+  const expected = (rosterTrips.info('roster') || {}).rid;
+  if (typeof result.rid === 'string' && expected && result.rid !== expected) {
     return;
   }
   const saving = (rosterTrips.info('roster') || {}).saving || null;

@@ -1,9 +1,9 @@
 """Exercise real roster files, backup generations and failures around replacement."""
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 

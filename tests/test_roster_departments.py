@@ -7,9 +7,9 @@ cannot leave an invalid roster behind. Invented names only.
 import copy
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 

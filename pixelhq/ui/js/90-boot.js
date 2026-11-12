@@ -43,6 +43,26 @@ function renderAll() {
   liveTab();
 }
 
+/* Live data usually arrives before the first snapshot: it is kept and rendered together with that snapshot. */
+function onLiveMessage(m) {
+  if (m.pixelhqLive) {
+    LIVE = m.pixelhqLive;
+    LIVE_ERR = null;
+    if (DATA) {
+      liveRender();
+    }
+    return true;
+  }
+  if (m.pixelhqLiveError) {
+    LIVE_ERR = String(m.pixelhqLiveError).slice(0, 160);
+    if (DATA) {
+      liveTab();
+    }
+    return true;
+  }
+  return false;
+}
+
 window.addEventListener('message', (e) => {
   if (e.source !== window.parent) {
     return;
@@ -83,15 +103,7 @@ window.addEventListener('message', (e) => {
   if (onConfigMessage(m)) {
     return;
   }
-  if (m.pixelhqLive) {
-    LIVE = m.pixelhqLive;
-    LIVE_ERR = null;
-    liveRender();
-    return;
-  }
-  if (m.pixelhqLiveError) {
-    LIVE_ERR = String(m.pixelhqLiveError).slice(0, 160);
-    liveTab();
+  if (onLiveMessage(m)) {
     return;
   }
   if (m.pixelhqTriageResult) {

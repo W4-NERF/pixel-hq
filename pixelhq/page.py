@@ -62,10 +62,19 @@ def font_faces() -> str:
     return _FONT_FACES
 
 
+def script_json(data) -> str:
+    """JSON that is inert inside an inline ``<script>``: every ``<``, ``>`` and ``&`` is a JSON escape.
+
+    Escaping only ``</`` is not enough: a card title such as ``<!--<script>`` switches the HTML parser into the
+    script's "double escaped" state, where the page's own ``</script>`` no longer ends the script.
+    """
+    text = json.dumps(data, ensure_ascii=False)
+    return text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+
+
 def page_html(data: dict | None = None) -> str:
     """The page from the copy read at import, with ``data`` embedded when given."""
     html = _TEMPLATE
     if data is not None:
-        blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")  # no </script> break-out
-        html = html.replace("/*PIXELHQ_DATA*/null", blob, 1)
+        html = html.replace("/*PIXELHQ_DATA*/null", script_json(data), 1)
     return html

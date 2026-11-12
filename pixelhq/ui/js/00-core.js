@@ -158,8 +158,25 @@ function liveStatus(b) {
 
 const ATTR = ['Precision', 'Stamina', 'Discipline', 'Wisdom'];
 const ATTR_T = ['correctness', 'completeness', 'format', 'safety'];
-const fmtN = (n) => Number(n || 0).toLocaleString(CFG().locale);
-const fmt1 = (v, d) => v == null ? '–' : Number(v).toLocaleString(CFG().locale, { maximumFractionDigits: d || 0 });
+/* locale and timezone are free-text settings: an invalid value ("en_GB", "Europe/Berlinn") makes Intl throw a RangeError,
+   which would blank every view. Each value is checked once and replaced by the default when Intl refuses it. */
+const intlChecked = new Map();
+function intlValid(kind, value) {
+  const key = kind + '\u0000' + value;
+  if (!intlChecked.has(key)) {
+    try {
+      new Intl.DateTimeFormat(kind === 'locale' ? value : 'en-GB', kind === 'zone' ? { timeZone: value } : {});
+      intlChecked.set(key, true);
+    } catch (e) {
+      intlChecked.set(key, false);
+    }
+  }
+  return intlChecked.get(key);
+}
+const LOCALE = () => intlValid('locale', CFG().locale) ? CFG().locale : 'en-GB';
+const ZONE = () => intlValid('zone', CFG().timezone) ? CFG().timezone : 'UTC';
+const fmtN = (n) => Number(n || 0).toLocaleString(LOCALE());
+const fmt1 = (v, d) => v == null ? '–' : Number(v).toLocaleString(LOCALE(), { maximumFractionDigits: d || 0 });
 
 function ago(ts) {
   if (!ts) {
@@ -181,8 +198,8 @@ function ago(ts) {
 function clock(ts) {
   try {
     return new Date(ts * 1000).toLocaleString(
-      CFG().locale,
-      { timeZone: CFG().timezone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
+      LOCALE(),
+      { timeZone: ZONE(), day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
     );
   } catch (e) {
     return new Date(ts * 1000).toISOString().slice(5, 16);
@@ -192,8 +209,8 @@ function clock(ts) {
 function hm() {
   try {
     return new Date().toLocaleTimeString(
-      CFG().locale,
-      { timeZone: CFG().timezone, hour: '2-digit', minute: '2-digit' }
+      LOCALE(),
+      { timeZone: ZONE(), hour: '2-digit', minute: '2-digit' }
     );
   } catch (e) {
     return new Date().toISOString().slice(11, 16);

@@ -175,7 +175,8 @@ assert.equal(titleField().value, 'Saved title', 'a later theme render');
 assert.equal(rosterDirty, false);
 editor.querySelector('[data-roster-save]').onclick();
 const again = messages.filter(m => m.pixelhqRoster).at(-1).pixelhqRoster;
-assert.deepEqual(again, saved, 'a second Save writes the saved roster, not the old one');
+assert.deepEqual(again.roster, saved.roster, 'a second Save writes the saved roster, not the old one');
+assert.notEqual(again.rid, saved.rid, 'every save has its own request id');
 """, iframe=True)
 
 

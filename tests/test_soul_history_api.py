@@ -211,3 +211,27 @@ def test_soul_history_does_not_wait_for_a_running_snapshot(app):
         finally:
             api._lock.release()
     run(app, scenario)
+
+
+@pytest.mark.parametrize("content_type", [None, "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"])
+def test_a_save_without_a_json_content_type_is_415_and_writes_nothing(app, fleet, content_type):
+    """A simple cross-origin request (no CORS preflight) cannot reach the SOUL history store."""
+    import json
+
+    async def scenario(client):
+        headers = {"content-type": content_type} if content_type else {}
+        result = await client.post("/soul-history", content=json.dumps(save_body()).encode(), headers=headers)
+        assert result.status_code == 415 and result.json() == {"ok": False, "message": "body: expected application/json."}
+        assert not history_dir(fleet).exists()
+    run(app, scenario)
+
+
+@pytest.mark.parametrize("content_type", ["application/json; charset=utf-8", "Application/JSON", "application/merge+json"])
+def test_json_media_types_with_parameters_are_accepted(app, fleet, content_type):
+    import json
+
+    async def scenario(client):
+        result = await client.post("/soul-history", content=json.dumps(save_body()).encode(),
+                                   headers={"content-type": content_type})
+        assert result.status_code == 200 and result.json()["ok"] is True
+    run(app, scenario)

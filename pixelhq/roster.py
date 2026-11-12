@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import tempfile
+from pathlib import Path
 
 from .config import SPRITE_VARIANTS, TEXT_RULE, text_rejected
 from .profiles import root_home
-
 
 ROOM_KEYS = ("id", "label", "main", "zones", "note")
 ZONE_KEYS = ("id", "label", "quarantine")

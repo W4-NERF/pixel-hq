@@ -6,7 +6,6 @@ import pytest
 
 from pixelhq import config, reviews
 
-
 BAD_IDS = [
     pytest.param("", id="empty"), pytest.param("sample bot", id="space"),
     pytest.param(" bot", id="leading-space"), pytest.param("bot ", id="trailing-space"),

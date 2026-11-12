@@ -10,9 +10,9 @@ from __future__ import annotations
 import copy
 import json
 import os
-from pathlib import Path
 import re
 import unicodedata
+from pathlib import Path
 
 try:
     from hermes_cli.config import load_config_readonly
@@ -179,6 +179,10 @@ def load() -> dict:
         # Loader errors may include private YAML contents; expose only the exception type.
         cfg.setdefault("config_error", f"Hermes settings: {type(exc).__name__}")
     _normalise(cfg)
+    if not isinstance(cfg["hermes_home"], str) or not cfg["hermes_home"].strip():
+        # Not a documented setting, but config.json may carry it (test homes do): never let it break every route.
+        cfg["warnings"].append("hermes_home: expected a path")
+        cfg["hermes_home"] = str(root_home())
     cfg["hermes_home"] = os.path.expanduser(cfg["hermes_home"])
     for key in ("reviews_path", "legacy_ledger_path"):
         cfg[key] = ledger_path(cfg, key)

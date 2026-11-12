@@ -1,8 +1,8 @@
 """Exercise roster UI event handlers in the shared plain-Node DOM, not a browser."""
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 

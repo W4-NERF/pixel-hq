@@ -1,7 +1,7 @@
 """Roster editor interactions, exact bridge payloads, pending guards and reset confirmation."""
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 
@@ -51,7 +51,8 @@ const save=root.querySelector('[data-roster-save]');save.onclick();save.onclick(
 root.querySelector('[data-roster-save]').onclick();
 assert.equal(messages.filter(m=>m.pixelhqRoster).length,1);
 const body=messages.find(m=>m.pixelhqRoster).pixelhqRoster;
-assert.deepEqual(body,{roster:expected});
+assert.match(body.rid,/^[0-9a-f]{24}$/);
+assert.deepEqual({...body,rid:undefined},{roster:expected,rid:undefined});
 assert.deepEqual(Object.keys(body.roster).sort(),['bots','rooms']);
 body.roster.bots.forEach(bot=>{
  assert.ok(!Object.hasOwn(bot,'xp')&&!Object.hasOwn(bot,'model')&&!Object.hasOwn(bot,'auto'));
@@ -136,7 +137,7 @@ assert.equal(messages.filter(m=>m.pixelhqRoster).length,0);
 timers.at(-1)();assert.notEqual(reset.dataset.armed,'1');
 reset.onclick();reset.onclick();
 assert.equal(root.querySelector('[data-roster-controls]').disabled,true);
-assert.deepEqual(messages.filter(m=>m.pixelhqRoster).map(m=>m.pixelhqRoster),[{reset:true}]);
+assert.deepEqual(messages.filter(m=>m.pixelhqRoster).map(m=>({...m.pixelhqRoster,rid:typeof m.pixelhqRoster.rid})),[{reset:true,rid:'string'}]);
 listeners.get('message')({source:window.parent,data:{pixelhqRosterResult:{ok:true,message:'Roster reset to generated.'}}});
 const fresh=JSON.parse(JSON.stringify(DATA));fresh.cfg.rosterSource='generated';
 listeners.get('message')({source:window.parent,data:{pixelhq:fresh}});

@@ -7,8 +7,8 @@ var/actions.jsonl (audit log, git-ignored).
 """
 from __future__ import annotations
 
-import datetime as dt
 import contextlib
+import datetime as dt
 import json
 import os
 import re
@@ -17,7 +17,8 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
-from . import config as cfgmod, dbutil
+from . import config as cfgmod
+from . import dbutil
 
 HERE = Path(__file__).resolve().parent
 
@@ -113,7 +114,8 @@ def run(body: dict) -> dict:
     elif action == "retry":
         cmd = base + ["unblock", "--reason", f"{tag} retry (from Pixel HQ)", tid]
     elif action == "comment":
-        cmd = base + ["comment", "--author", f"{operator} (Pixel HQ)", tid, text]
+        # "--" ends the options: comment text such as "--help" or "--author=…" stays the comment body.
+        cmd = base + ["comment", "--author", f"{operator} (Pixel HQ)", "--", tid, text]
     else:  # archive — never --rm
         cmd = base + ["archive", tid]
 
@@ -130,7 +132,10 @@ def run(body: dict) -> dict:
     entry = {"ts": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "board": board, "id": tid,
              "action": action, "cat": cat, "before": before, "after": after, "rc": rc, "ok": ok,
              "text": text[:500] if text else None}
-    _log(entry)
+    try:
+        _log(entry)
+    except OSError:  # the CLI has already run: report its result, never a 500 that invites a duplicate retry
+        warnings.append("audit log: var/actions.jsonl could not be written")
     hint = ""
     if ok and action in ("answer", "retry") and card and card.get("remote"):
         hint = " Note: this bot runs on a remote host – the local dispatcher will not start it."
