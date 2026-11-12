@@ -23,10 +23,9 @@ const useRef=()=>({current:{contentWindow:frame}});
 const useState=()=>[null,()=>{}];
 const useCallback=f=>f;
 const useEffect=f=>effects.push(f);
-const useQuery=()=>({data:{cfg:{},bots:[]}});
-const useQueryClient=()=>({setQueryData:(k,d)=>cache.push([k,d])});
 const jsx=()=>null;
-const host={},PALETTE_AREA='',ROUTES_AREA='',SIDEBAR_NAV_AREA='',SandboxedFrame={};
+const sdk={useTheme:()=>({resolvedMode:'dark'}),useQuery:()=>({data:{cfg:{},bots:[]}}),useQueryClient:()=>({setQueryData:(k,d)=>cache.push([k,d])}),
+  host:{},PALETTE_AREA:'',ROUTES_AREA:'',SIDEBAR_NAV_AREA:'',SandboxedFrame:{}};
 const ctx={rest:(path, options)=>{
  calls.push({path,options});
  if(path==='/page')return Promise.resolve({html:'<sample>'});
@@ -58,7 +57,7 @@ const ctx={rest:(path, options)=>{
  const result=results[0];
  assert.equal(result.agent,body.agent);assert.equal(result.sessionId,body.sessionId);
  assert.equal(result.ok,MODE==='success'||MODE==='refresh');
- if(MODE==='transport')assert.ok((result.message||result.error).includes('restart the Hermes desktop app'));
+ if(MODE==='transport')assert.ok((result.message||result.error).includes('restart the Hermes gateway'));
  const refreshes=calls.filter(c=>c.path==='/snapshot?max_age=0');
  assert.equal(refreshes.length,(MODE==='success'||MODE==='refresh')?1:0);
  assert.equal(cache.length,MODE==='success'?1:0);

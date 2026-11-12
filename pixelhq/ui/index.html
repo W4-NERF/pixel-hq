@@ -3,13 +3,17 @@
 <title>Pixel HQ</title>
 <style>
 /*PIXELHQ_CSS*/</style></head><body>
+<div class="banner" id="stale-banner" role="status" style="display:none"><span id="stale-text"></span><button type="button" id="stale-dismiss">Dismiss</button></div>
 <header class="hdr"><div class="l"><span class="px" style="font-size:20px" id="brand">PIXEL HQ</span>
-<span><button class="on" data-tab="office">Office</button> <button data-tab="live" id="livetab">Live</button> <button data-tab="board">Leaderboard</button> <button data-tab="blk" id="blktab">Blocked</button></span></div>
+<span><button class="on" data-tab="office">Office</button> <button data-tab="live" id="livetab">Live</button> <button data-tab="board">Leaderboard</button> <button data-tab="blk" id="blktab">Blocked</button> <button data-tab="roster" id="rostertab" style="display:none">Roster</button></span></div>
 <div style="display:flex;gap:8px;align-items:center"><span class="tag" id="stand"></span><button id="reload">Reload</button></div></header>
 <div class="hud" id="hud"></div>
 
 <section class="view on" id="office"><div>
- <div class="filters" id="ofilter"><button class="on" data-f="all">All</button><button data-f="running">Working</button><button data-f="blocked">Blocked</button><button data-f="idle">Idle</button></div>
+ <div id="first-run" class="note first-run" style="display:none"></div>
+ <div class="filters" id="ofilter"><button class="on" data-f="all">All</button><button data-f="running">Working</button><button data-f="blocked">Blocked</button><button data-f="idle">Idle</button>
+ <button id="edit-layout" data-layout-edit aria-pressed="false" style="display:none;margin-left:auto">Edit layout</button></div>
+ <div class="layout-bar" id="office-bar"></div>
  <div class="floor" id="floor"></div>
  <div class="log" style="margin-top:16px"><h3>EVENT LOG</h3><div class="logbody" id="log1" style="max-height:340px"></div></div></div>
  <div class="right"><div id="detail" style="position:sticky;top:12px"></div></div>
@@ -34,7 +38,9 @@
   <button id="btriage" style="margin-left:auto;border-color:var(--olive)"></button></div>
  <div id="blist"></div>
 </section>
+<section class="view" id="roster"><div class="layout-bar" id="roster-bar"></div><div id="roster-editor"></div></section>
 <div class="foot" id="foot"></div>
+<div class="drag-ghost" id="drag-ghost" aria-hidden="true"></div>
 
 <script>
 /*PIXELHQ_JS*/</script></body></html>

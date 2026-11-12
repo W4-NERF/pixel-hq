@@ -152,7 +152,7 @@ def test_blockers_cli_selection_and_missing_keys_are_unchanged(fleet, mode):
     assert data["boardErrors"] == data["warnings"] == []
 
 
-@pytest.mark.parametrize("mode", ["package", "file"])
+@pytest.mark.parametrize("mode", ["package", "loader"])
 def test_blockers_import_is_quiet_in_a_fresh_standalone_interpreter(tmp_path, mode):
     probe = tmp_path / "import_probe.py"
     probe.write_text(
@@ -160,31 +160,18 @@ def test_blockers_import_is_quiet_in_a_fresh_standalone_interpreter(tmp_path, mo
         "if sys.argv[1] == 'package':\n"
         "    module = importlib.import_module('pixelhq.blockers')\n"
         "else:\n"
-        "    spec = importlib.util.spec_from_file_location('pixelhq_blockers_probe', sys.argv[2])\n"
-        "    module = importlib.util.module_from_spec(spec)\n"
-        "    spec.loader.exec_module(module)\n"
+        "    spec = importlib.util.spec_from_file_location('pixelhq_plugin_loader', sys.argv[2])\n"
+        "    loader = importlib.util.module_from_spec(spec)\n"
+        "    spec.loader.exec_module(loader)\n"
+        "    module = loader.module('blockers')\n"
         "assert callable(module.query)\n"
         "print('quiet import: ok')\n", encoding="utf-8")
-    result = subprocess.run([sys.executable, str(probe), mode, str(ROOT / "pixelhq/blockers.py")],
+    target = ROOT / ("pixelhq_loader.py" if mode == "loader" else "pixelhq/blockers.py")
+    result = subprocess.run([sys.executable, str(probe), mode, str(target)],
                             cwd=tmp_path, env={**os.environ, "PYTHONPATH": str(ROOT), "PYTHONNOUSERSITE": "1"},
                             capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
     assert result.stdout == "quiet import: ok\n"
-
-
-def test_dashboard_load_reexecutes_entry_modules_but_keeps_sibling_imports(tmp_path, monkeypatch):
-    from dashboard import plugin_api as api
-    from pixelhq import config
-
-    monkeypatch.setattr(api, "_PIXELHQ", tmp_path)
-    entry = tmp_path / "entry.py"
-    entry.write_text("from pixelhq import config\nvalue = 'before'\n", encoding="utf-8")
-    first = api._load("pixelhq_entry_probe", "entry.py")
-    entry.write_text("from pixelhq import config\nvalue = 'after source edit'\n", encoding="utf-8")
-    second = api._load("pixelhq_entry_probe", "entry.py")
-    assert first is not second
-    assert first.value == "before" and second.value == "after source edit"
-    assert first.config is second.config is config
 
 
 @pytest.mark.parametrize("module_name,entrypoint", [("collect", "collect"), ("live", "query")])
@@ -197,12 +184,12 @@ def test_dashboard_entries_read_config_and_roster_changes_after_import(fleet, mo
     def ids(data):
         return set(data["bots"]) if isinstance(data["bots"], dict) else {bot["id"] for bot in data["bots"]}
 
-    module = api._load("pixelhq_lazy_probe", module_name + ".py")
+    module = api._module(module_name)
     assert ids(snapshot(module)) == {"default", "ops-bot", "remote-bot"}
     data_dir = fleet.root / "plugin-data/pixel-hq"
     (data_dir / "roster.json").write_text("{invalid", encoding="utf-8")
     (data_dir / "config.json").write_text('{"stale_days":"invalid"}', encoding="utf-8")
-    for loaded in (module, api._load("pixelhq_lazy_probe", module_name + ".py")):
+    for loaded in (module, api._module(module_name)):
         data = snapshot(loaded)
         assert ids(data) == {"default", "ops-bot"}
         assert "stale_days: expected int" in data["warnings"]

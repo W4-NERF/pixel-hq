@@ -2,8 +2,6 @@ dist/
 __pycache__/
 var/
 .hermes-package.json
-pixelhq/config.json
-pixelhq/roster.json
 docs/video/node_modules/
 docs/video/*.mp4
 .qa/

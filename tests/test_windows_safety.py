@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = [ROOT / "__init__.py", *sorted((ROOT / "pixelhq").glob("*.py")), *sorted((ROOT / "dashboard").glob("*.py"))]
+SOURCES = [ROOT / "__init__.py", ROOT / "pixelhq_loader.py", *sorted((ROOT / "pixelhq").glob("*.py")),
+           *sorted((ROOT / "dashboard").glob("*.py"))]
 
 
 def _calls(tree, dotted):

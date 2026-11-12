@@ -12,13 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
-if __package__:
-    from . import common, dbutil
-    from .common import clip
-else:
-    import common
-    import dbutil
-    from common import clip
+from . import common, dbutil
+from .common import clip
 
 VERDICTS = ("pass", "revise", "fail")
 OUTCOMES = {

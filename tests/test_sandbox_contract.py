@@ -4,8 +4,13 @@ from pathlib import Path
 
 import pytest
 
+from pixelhq import page
+
 ROOT = Path(__file__).resolve().parents[1]
-UI_FILES = ("pixelhq/ui/app.js", "pixelhq/ui/index.html")
+UI_SOURCES = {
+    "pixelhq/ui/js (bundle)": page.bundle_js,
+    "pixelhq/ui/index.html": lambda: (ROOT / "pixelhq/ui/index.html").read_text(encoding="utf-8"),
+}
 COMMENTS = re.compile(
     r'''("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|'''
     r"/\*.*?\*/|//[^\r\n]*|<!--.*?-->",
@@ -44,10 +49,15 @@ def sandbox_violations(source):
             if re.search(pattern, compact_dots if name == "global dialog" else source, re.IGNORECASE)]
 
 
-@pytest.mark.parametrize("relative_path", UI_FILES)
-def test_ui_respects_scripts_only_sandbox(relative_path):
-    violations = sandbox_violations((ROOT / relative_path).read_text(encoding="utf-8"))
-    assert violations == [], f"{relative_path}: forbidden sandbox features: {', '.join(violations)}"
+@pytest.mark.parametrize("name", UI_SOURCES)
+def test_ui_respects_scripts_only_sandbox(name):
+    violations = sandbox_violations(UI_SOURCES[name]())
+    assert violations == [], f"{name}: forbidden sandbox features: {', '.join(violations)}"
+
+
+@pytest.mark.parametrize("path", sorted((ROOT / "pixelhq/ui/js").glob("*.js")), ids=lambda p: p.name)
+def test_each_ui_script_file_respects_the_sandbox_on_its_own(path):
+    assert sandbox_violations(path.read_text(encoding="utf-8")) == []
 
 
 @pytest.mark.parametrize("name, source", [

@@ -1,8 +1,10 @@
 """Pixel HQ agent tools; desktop UI and backend are registered separately."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 
@@ -28,12 +30,27 @@ REVIEW_SCHEMA = {
 }
 
 
+def _loader():
+    """The shared loader module: built completely first, then published with ``setdefault`` (one instance)."""
+    loader = sys.modules.get("pixelhq_plugin_loader")
+    if loader is None:
+        spec = importlib.util.spec_from_file_location(
+            "pixelhq_plugin_loader", Path(__file__).resolve().parent / "pixelhq_loader.py")
+        candidate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(candidate)
+        loader = sys.modules.setdefault(spec.name, candidate)
+    return loader
+
+
+def _package():
+    """The ``pixelhq_plugin`` package; the first call in a process loads every module, later calls reuse it."""
+    return _loader().load()
+
+
 def _handle_review(args: dict, **kwargs) -> str:
     try:
-        if __package__:
-            from .pixelhq import config, reviews
-        else:
-            from pixelhq import config, reviews
+        package = _package()
+        config, reviews = package.config, package.reviews
         home = Path(os.environ.get("HERMES_HOME") or "~/.hermes").expanduser()
         reviewer = os.environ.get("HERMES_PROFILE") or (home.name if home.parent.name == "profiles" else "default")
         result = reviews.append_tool(args, config.load(), reviewer)
@@ -44,6 +61,14 @@ def _handle_review(args: dict, **kwargs) -> str:
 
 
 def register(ctx) -> None:
-    """Register tools only when called by the plugin loader."""
+    """Register tools only when called by the plugin loader.
+
+    Also pins the code version of this process: every Pixel HQ module is loaded now, so files updated later
+    only take effect after the Hermes gateway restarts (``hermes gateway restart``).
+    """
+    try:
+        _package()
+    except Exception:
+        pass  # the handler retries and reports a safe error
     ctx.register_tool(name="pixelhq_review", toolset="pixelhq", schema=REVIEW_SCHEMA,
                       handler=_handle_review, description=REVIEW_DESCRIPTION)

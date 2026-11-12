@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from pixelhq import page
 from pixelhq.demo import snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run_ui(tmp_path, probe, *, actions="?actions=1", iframe=False):
     script = (ROOT / "tests" / "ui_dom.cjs").read_text(encoding="utf-8")
-    script += (ROOT / "pixelhq" / "ui" / "app.js").read_text(encoding="utf-8")
+    script += page.bundle_js()
     script += "\nDATA = " + json.dumps(snapshot()) + ";\n" + probe + "\nconsole.log('ui review behavior: ok');\n"
     path = tmp_path / "review-ui.cjs"
     path.write_text(script, encoding="utf-8")
@@ -75,7 +76,9 @@ confirm.onclick(); // duplicate click is ignored
 widget.querySelector('[data-review-confirm]').onclick(); // pending widgets cannot send again
 const sent = messages.filter(m => m.pixelhqReview);
 assert.equal(sent.length, 1);
-assert.deepEqual(sent[0].pixelhqReview, {agent:bot.id, verdict:'revise', sessionId:null,
+const {rid:sentRid, ...sentBody} = sent[0].pixelhqReview;
+assert.match(sentRid, /^[0-9a-f]{16,32}$/);
+assert.deepEqual(sentBody, {agent:bot.id, verdict:'revise', sessionId:null,
   ref:'<edited> & "reference"', dims:{correctness:5,completeness:4,format:4,safety:4}});
 assert.ok(widget.innerHTML.includes('Saving review'));
 // Only the parent can resolve a pending review.
@@ -114,16 +117,18 @@ widget.querySelectorAll('[data-review-dim]').forEach((input, index) => {
 assert.equal(typeof ref.onkeydown, 'function');
 for (const key of ['Escape','a','Tab']) ref.onkeydown({key, preventDefault:()=>assert.fail('not Enter')});
 assert.equal(messages.filter(m => m.pixelhqReview).length, 0);
-assert.equal(reviewPending.size, 0);
+assert.equal(reviewTrips.entries().length, 0);
 let prevented = 0;
 ref.onkeydown({key:'Enter', preventDefault:()=>{prevented++;}});
 assert.equal(prevented, 1);
 const key = reviewKey(bot.id, sessionId), sent = messages.filter(m => m.pixelhqReview);
 if (hosted) {
   assert.equal(sent.length, 1);
-  assert.deepEqual(sent[0].pixelhqReview, {agent:bot.id, sessionId, verdict,
+  const {rid:sentRid, ...sentBody} = sent[0].pixelhqReview;
+  assert.match(sentRid, /^[0-9a-f]{16,32}$/);
+  assert.deepEqual(sentBody, {agent:bot.id, sessionId, verdict,
     ref:'<entered> & "reference"', dims:{correctness:1,completeness:2,format:3,safety:5}});
-  assert.ok(reviewPending.has(key));
+  assert.ok(reviewTrips.busy(key));
   assert.equal(widget.querySelector('fieldset').disabled, true);
   assert.ok(widget.innerHTML.includes('Saving review'));
   ref.onkeydown({key:'Enter', preventDefault:()=>{}}); // repeated key before repaint
@@ -131,13 +136,13 @@ if (hosted) {
   assert.equal(messages.filter(m => m.pixelhqReview).length, 1);
   listeners.get('message')({source:window.parent,
     data:{pixelhqReviewResult:{agent:bot.id,sessionId,ok:true,message:'Review saved.'}}});
-  assert.ok(!reviewPending.has(key));
+  assert.ok(!reviewTrips.busy(key));
   assert.ok(!widget.querySelector('[data-review-form]'));
   assert.ok(widget.innerHTML.includes('res ok'));
 } else {
   assert.equal(sent.length, 0);
-  assert.ok(!reviewPending.has(key));
-  assert.equal(reviewResults.get(key).message, 'standalone page: no host, nothing was sent');
+  assert.ok(!reviewTrips.busy(key));
+  assert.equal(reviewTrips.result(key).message, 'standalone page: no host, nothing was sent');
   assert.equal(widget.querySelector('[data-review-ref]').value, '<entered> & "reference"');
   assert.equal(widget.querySelector('fieldset').disabled, false);
   assert.ok(widget.innerHTML.includes('res bad'));

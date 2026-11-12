@@ -13,10 +13,12 @@ import pytest
 @pytest.fixture
 def tool_config(fleet, monkeypatch):
     from pixelhq import config
+    from tests.plugin_pkg import package
 
     data = fleet.root / "plugin-data" / "pixel-hq"
-    monkeypatch.setattr(config, "_DIRS", [data])
-    monkeypatch.setattr(config, "load_config_readonly", lambda: {})
+    for module in (config, package().config):  # the handler runs the loaded package
+        monkeypatch.setattr(module, "_DIRS", [data])
+        monkeypatch.setattr(module, "load_config_readonly", lambda: {})
     return fleet
 
 
@@ -152,7 +154,9 @@ def test_orchestrator_rating_its_helper_earns_summon_xp(tool_config, monkeypatch
 ])
 def test_invalid_tool_args_return_error_without_creating_or_changing_ledger(
         tool_config, monkeypatch, change, message):
-    from pixelhq import config
+    from tests.plugin_pkg import package
+
+    config = package().config
 
     path = tool_config.root / "new" / "reviews.jsonl"
     cfg = config.load() | {"reviews_path": str(path)}
@@ -182,14 +186,17 @@ def test_manifest_tool_capabilities_match_the_registration():
     manifest = yaml.safe_load((Path(__file__).resolve().parents[1] / "plugin.yaml").read_text(encoding="utf-8"))
     # Hermes reads these as top-level manifest keys (hermes plugins validate checks provides_tools).
     assert manifest["provides_tools"] == [registration()["name"]]
-    assert manifest["provides_hooks"] == [] and manifest["provides_middleware"] == []
+    assert manifest["provides_hooks"] == []
+    assert "provides_middleware" not in manifest  # D14: an empty key only triggers warnings on older Hermes
     assert "capabilities" not in manifest
     assert "pixelhq_review" in manifest["description"]
 
 
 @pytest.mark.parametrize("stage", ["config", "writer", "io"])
 def test_handler_returns_safe_json_for_setup_and_write_failures(tool_config, monkeypatch, stage):
-    from pixelhq import config, reviews
+    from tests.plugin_pkg import package
+
+    config, reviews = package().config, package().reviews
 
     marker = "SAMPLE_PRIVATE_SETTING"
     def fail(*args, **kwargs):
@@ -207,7 +214,9 @@ def test_handler_returns_safe_json_for_setup_and_write_failures(tool_config, mon
 
 
 def test_configured_review_path_is_reloaded_for_each_call(tool_config, monkeypatch):
-    from pixelhq import config
+    from tests.plugin_pkg import package
+
+    config = package().config
 
     target = tool_config.root / "custom" / "ratings.jsonl"
     settings = {"plugins": {"entries": {"pixel-hq": {"settings": {"reviews_path": str(target)}}}}}

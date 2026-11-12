@@ -1,5 +1,5 @@
 {
-  "_doc": "Copy to roster.json and describe your fleet. Profiles missing here are added automatically to the first zone of the main room. Fields: id = Hermes profile name; cls = role; title = character class; zone = zone id from rooms; loc = where it runs (label only); color = sprite colour (#rrggbb); leader = wears the crown; remote = runs on another host (status from Kanban only).",
+  "_doc": "Copy to roster.json and describe your fleet. Profiles missing here are added automatically to the first zone of the main room. Fields: id = Hermes profile name; cls = role; title = character class; zone = zone id from rooms; loc = where it runs (label only); color = sprite colour (#rrggbb); leader = wears the crown; remote = runs on another host (status from Kanban only); sprite = optional override: default, wizard, knight, engineer, scout, medic, scribe or rogue (omit for role keywords or a stable id hash; the leader crown replaces headgear).",
   "rooms": [
     {"id": "hq", "label": "HQ · MAIN HOST", "main": true, "zones": [
       {"id": "command", "label": "COMMAND"},

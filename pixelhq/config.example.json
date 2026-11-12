@@ -2,6 +2,7 @@
   "locale": "en-GB",
   "timezone": "UTC",
   "theme_label": "PIXEL HQ",
+  "appearance": "auto",
   "operator_name": "operator",
   "orchestrator_profile": "default",
   "reviews_path": "",

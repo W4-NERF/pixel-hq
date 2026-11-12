@@ -11,15 +11,8 @@ from dashboard import plugin_api as api
 
 @pytest.fixture
 def app(fleet, monkeypatch):
-    original = api._load
-    def fixture_load(name, filename):
-        mod = original(name, filename)
-        if filename == "collect.py":
-            # Redirect only the fixture's config lookup; keep collection, roster and I/O real.
-            monkeypatch.setattr(mod.cfgmod, "_DIRS", [fleet.root / "plugin-data" / "pixel-hq"])
-
-        return mod
-    monkeypatch.setattr(api, "_load", fixture_load)
+    # Redirect only the fixture's config lookup; keep collection, roster and I/O real.
+    monkeypatch.setattr(api._module("config"), "_DIRS", [fleet.root / "plugin-data" / "pixel-hq"])
     monkeypatch.setattr(api, "_cache", {"t": 0.0, "data": None})
     monkeypatch.setattr(api, "_lock", asyncio.Lock())
     app = FastAPI()

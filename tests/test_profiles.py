@@ -119,18 +119,19 @@ def test_collector_discovers_profiles_without_cli(fleet, monkeypatch):
 
 
 @pytest.mark.parametrize("module_name", ["collect", "live"])
-def test_dashboard_file_import_works_without_previous_module_imports(fleet, tmp_path, module_name):
+def test_dashboard_loader_import_works_without_previous_module_imports(fleet, tmp_path, module_name):
     root = Path(__file__).resolve().parents[1]
     source = """
 import importlib.util, json, sys
-spec = importlib.util.spec_from_file_location('pixelhq_probe', sys.argv[1])
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+spec = importlib.util.spec_from_file_location('pixelhq_plugin_loader', sys.argv[1])
+loader = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(loader)
+module = loader.module(sys.argv[2])
 result = module.collect() if hasattr(module, 'collect') else module.query()
 print(json.dumps(result))
 """
-    env = {**os.environ, "PYTHONPATH": str(root), "PYTHONNOUSERSITE": "1", "HERMES_HOME": str(fleet.root)}
-    result = subprocess.run([sys.executable, "-c", source, str(root / "pixelhq" / (module_name + ".py"))],
+    env = {**os.environ, "PYTHONPATH": "", "PYTHONNOUSERSITE": "1", "HERMES_HOME": str(fleet.root)}
+    result = subprocess.run([sys.executable, "-c", source, str(root / "pixelhq_loader.py"), module_name],
                             cwd=tmp_path, env=env, capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)

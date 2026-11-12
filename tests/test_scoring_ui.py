@@ -79,4 +79,4 @@ def test_js_gate_checks_the_split_ui():
     result = subprocess.run([sys.executable, "tools/jscheck.py"], cwd=ROOT, capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "desktop/plugin.js: ok" in result.stdout
-    assert "pixelhq/ui/app.js: ok" in result.stdout
+    assert "pixelhq/ui/js (bundle): ok" in result.stdout

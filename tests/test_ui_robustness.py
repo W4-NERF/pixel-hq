@@ -90,9 +90,9 @@ widget.querySelector('[data-review-ref]').value = 'Sample unsent draft';
 widget.querySelector('[data-review-ref]').oninput();
 widget.querySelector('[data-review-confirm]').onclick();
 const key = reviewKey(bot.id, sessionId);
-assert.equal(reviewPending.has(key), false, 'no pending state may survive a standalone submit');
-assert.equal(reviewResults.get(key).ok, false);
-assert.equal(reviewResults.get(key).message, 'standalone page: no host, nothing was sent');
+assert.equal(reviewTrips.busy(key), false, 'no pending state may survive a standalone submit');
+assert.equal(reviewTrips.result(key).ok, false);
+assert.equal(reviewTrips.result(key).message, 'standalone page: no host, nothing was sent');
 assert.equal(messages.filter(m => m.pixelhqReview).length, 0);
 assert.ok(!widget.innerHTML.includes('Saving review'));
 assert.equal(widget.querySelector('fieldset').disabled, false);
@@ -120,7 +120,7 @@ blk();
 let button = document.querySelectorAll('[data-act]')[0];
 button.onclick();
 if (CONFIRM.has(action)) {
-  assert.equal(pend[key], undefined, 'the first click only arms destructive actions');
+  assert.equal(actionTrips.busy(key), false, 'the first click only arms destructive actions');
   assert.equal(button.dataset.armed, '1');
   button.onclick();
 }
@@ -128,19 +128,19 @@ const sent = messages.filter(m => m.pixelhqAction);
 if (hosted) {
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].pixelhqAction, {board:'platform', id:'t_abcdef01', action, text:'Sample response'});
-  assert.equal(pend[key], true);
+  assert.equal(actionTrips.busy(key), true);
   const response = {pixelhqActionResult:{board:'platform', id:'t_abcdef01', ok:true, message:'Sample action complete'}};
   listeners.get('message')({source:{}, data:response});
-  assert.equal(pend[key], true, 'only the host may resolve an embedded action');
+  assert.equal(actionTrips.busy(key), true, 'only the host may resolve an embedded action');
   listeners.get('message')({source:window.parent, data:response});
-  assert.ok(!pend[key]);
+  assert.ok(!actionTrips.busy(key));
   assert.equal(drafts[key], undefined);
   assert.ok(elements.get('blist').innerHTML.includes('Sample action complete'));
 } else {
-  assert.ok(!pend[key], 'standalone actions must finish synchronously');
+  assert.ok(!actionTrips.busy(key), 'standalone actions must finish synchronously');
   assert.equal(sent.length, 0);
-  assert.equal(results[key].ok, false);
-  assert.equal(results[key].message, 'standalone page: no host, nothing was sent');
+  assert.equal(actionTrips.result(key).ok, false);
+  assert.equal(actionTrips.result(key).message, 'standalone page: no host, nothing was sent');
   assert.equal(drafts[key], 'Sample response');
   assert.ok(elements.get('blist').innerHTML.includes('standalone page: no host, nothing was sent'));
   assert.ok(!elements.get('blist').innerHTML.includes('running …'));
@@ -158,7 +158,7 @@ DATA.blockers = [{board:'platform', id:'t_abcdef01', title:'Sample triage task',
 blk();
 const button = elements.get('btriage');
 button.onclick(); button.onclick();
-assert.equal(triagePending, false);
+assert.equal(triageBusy(), false);
 assert.equal(button.disabled, false);
 assert.equal(messages.filter(m => m.pixelhqTriage).length, 0);
 assert.ok(elements.get('bres').innerHTML.includes('standalone page: no host, nothing was sent'));

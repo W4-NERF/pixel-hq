@@ -14,14 +14,11 @@ import sys
 import time
 from pathlib import Path
 
-if __package__:
-    from . import config as cfgmod, dbutil
-    from .common import boards, clip
-else:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import config as cfgmod
-    import dbutil
-    from common import boards, clip
+if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/blockers.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "pixelhq"
+from . import config as cfgmod, dbutil
+from .common import boards, clip
 
 # The action handler enforces the same category policy server-side.
 ALLOWED = {

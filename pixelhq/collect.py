@@ -25,18 +25,12 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-if __package__:
-    from . import config as cfgmod, dbutil, profiles as profilemod, scoring
-    from .blockers import ALLOWED, read_blockers
-    from .common import boards, clip, state_db
-else:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import config as cfgmod
-    import dbutil
-    import profiles as profilemod
-    import scoring
-    from blockers import ALLOWED, read_blockers
-    from common import boards, clip, state_db
+if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/collect.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "pixelhq"
+from . import config as cfgmod, dbutil, profiles as profilemod, scoring
+from .blockers import ALLOWED, read_blockers
+from .common import boards, clip, state_db
 
 ACTIVE_WINDOW_S = 10 * 60
 EVENT_WINDOW_S = 7 * 24 * 3600
@@ -174,6 +168,15 @@ def _color_for(name: str) -> str:
     return "#%02X%02X%02X" % (int(r * 255), int(g * 255), int(b * 255))
 
 
+def default_department(rooms: list) -> str | None:
+    """Department for a profile that is not in the roster (R3-D1): the first one of the main room, else the first
+    in file order (rooms in order, departments in order). Never an id that does not exist; None without departments."""
+    found = cfgmod.departments(rooms)
+    in_main = [zone for room, zone in found if room.get("main")]
+    ordered = in_main or [zone for _room, zone in found]
+    return ordered[0]["id"] if ordered else None
+
+
 def roster_bots(profiles: dict, warnings: list[str] | None = None, *,
                 roster: dict | None = None, cfg: dict | None = None) -> list:
     """Keep real/remote entries and auto-recruit local profiles missing from the roster."""
@@ -188,13 +191,17 @@ def roster_bots(profiles: dict, warnings: list[str] | None = None, *,
             warnings.append(clip(f"roster: dropped nonexistent profile {bot['id']}", 120))
     known = {b["id"] for b in bots}
     rooms = roster["rooms"]
-    main = next((r for r in rooms if r.get("main")), rooms[0] if rooms else None)
-    zone = main["zones"][0]["id"] if main and main.get("zones") else "ops"
+    zone = default_department(rooms)
     generated = roster.get("rosterSource") == "generated"
     for name in sorted(profiles):
         if name not in known:
+            if not generated and zone is None:
+                warnings.append(clip(f"roster: no department for new profile {name}", 120))
+                continue
             leader = generated and name == cfg["orchestrator_profile"]
-            bots.append({"id": name, "cls": clip(profiles[name].get("description") or "Hermes profile", 120),
+            role = "".join(ch for ch in " ".join(str(profiles[name].get("description") or "").split())
+                           if not cfgmod.text_rejected(ch))
+            bots.append({"id": name, "cls": clip(role, 40) or "Hermes profile",
                          "title": "Recruit", "zone": ("command" if leader else "crew") if generated else zone,
                          **({"leader": True} if leader else {}),
                          "loc": "", "color": _color_for(name), "auto": True})

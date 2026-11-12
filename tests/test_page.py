@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_page_inlines_markup_styles_script_and_data():
     ui = ROOT / "pixelhq" / "ui"
-    assert sorted(p.name for p in ui.iterdir()) == ["app.js", "index.html", "style.css"]
-    assert not (ROOT / "pixelhq" / "ui.html").exists()
+    assert sorted(p.name for p in ui.iterdir()) == ["index.html", "js", "style.css"]
+    assert not (ROOT / "pixelhq" / "ui.html").exists() and not (ui / "app.js").exists()
     markup = (ui / "index.html").read_text(encoding="utf-8")
     css = (ui / "style.css").read_text(encoding="utf-8")
-    js = (ui / "app.js").read_text(encoding="utf-8")
+    js = page.bundle_js()
     assert markup.count("/*PIXELHQ_CSS*/") == markup.count("/*PIXELHQ_JS*/") == 1
     data = {"demo": True, "bots": [], "sample": "A sample <quest>"}
     expected = markup.replace("/*PIXELHQ_CSS*/", css).replace("/*PIXELHQ_JS*/", js)

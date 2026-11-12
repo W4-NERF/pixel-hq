@@ -12,15 +12,12 @@ import sys
 import time
 from pathlib import Path
 
-if __package__:
-    from . import config as cfgmod
-    from .collect import ALLOWED, achievements
-    from .scoring import level_of
-else:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import config as cfgmod
-    from collect import ALLOWED, achievements
-    from scoring import level_of
+if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/demo.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "pixelhq"
+from . import config as cfgmod
+from .collect import ALLOWED, achievements
+from .scoring import level_of
 
 QUESTS = ["Rotate TLS certificates on the edge proxy", "Nightly backup verification report",
           "Upgrade the reverse proxy to the current release", "Review firewall policy drift",
@@ -44,7 +41,7 @@ REASONS = {"you": ["Waiting for approval: switch the public DNS record to the ne
 
 def snapshot(seed: int = 7) -> dict:
     rnd = random.Random(seed)
-    roster = json.loads((Path(__file__).with_name("roster.example.json")).read_text(encoding="utf-8"))
+    roster = _demo_roster()
     cfg = cfgmod.DEFAULTS | {"theme_label": "PIXEL HQ"}
     now = time.time()
     bots, events, blockers, live = [], [], [], {}
@@ -114,6 +111,7 @@ def snapshot(seed: int = 7) -> dict:
         live[r["id"]] = {"active": status == "running", "sessions": sessions, "tasks": tasks,
                          "last": None if status == "running" else {"at": b["lastActivity"], "title": rnd.choice(QUESTS), "step": "", "source": "desktop"},
                          "error": None, "remote": bool(r.get("remote"))}
+    _pin_floor_numbers(bots, blockers, live, now)
     events.sort(key=lambda e: e["ts"], reverse=True)
     order = {"you": 0, "technical": 1, "stale": 2, "unknown": 3, "upstream": 4}
     blockers.sort(key=lambda x: (order[x["cat"]], -x["ageDays"]))
@@ -121,6 +119,54 @@ def snapshot(seed: int = 7) -> dict:
     return {"generated": now, "bots": bots, "reactor": reactor, "events": events[:40], "blockers": blockers, "boardErrors": [], "warnings": [],
             "unassigned": {}, "cfg": cfgmod.public(cfg, roster) | {"toolsDir": "<pixel-hq>/pixelhq"}, "collectMs": 12, "demo": True,
             "live": {"generated": now, "ms": 3, "bots": live, "unassignedTasks": {}}}
+
+
+# The Office floor shows members / active / blocked / average HP / XP per department. Whatever the seed draws, these bots are
+# pinned so that the ops and lab departments of the example roster always have non-trivial numbers (two or more members,
+# at least one working, at least one blocked card, HP values, XP): two bots work, two bots own a blocked card.
+FLOOR_WORKING = ("devops", "dev-a")
+FLOOR_CARDS = ("netadmin", "dev-a")
+
+
+def _pin_floor_numbers(bots: list, blockers: list, live: dict, now: float) -> None:
+    for b in bots:
+        stem = f"t_{_stable_number(b['id']) % 16**8:08x}"
+        card = f"t_{_stable_number(b['id'] + '/card') % 16**8:08x}"
+        title = QUESTS[len(b["id"]) % len(QUESTS)]
+        if b["id"] in FLOOR_WORKING and b["status"] != "running":
+            b.update(status="running", quests=[{"id": stem, "title": title, "status": "running", "board": "platform", "prio": 2}] + b["quests"])
+            live[b["id"]].update(active=True, last=None, tasks=[{"board": "platform", "id": stem, "title": title, "startedAt": now - 1500,
+                                                                "heartbeatAt": now - 20, "heartbeatAge": 20, "pid": 4242}])
+        if b["id"] in FLOOR_CARDS and not any(c["assignee"] == b["id"] for c in blockers):
+            b.update(status=b["status"] if b["status"] == "running" else "blocked", blocked=b["blocked"] + 1,
+                     quests=b["quests"] + [{"id": card, "title": title, "status": "blocked", "board": "platform", "prio": 2}])
+            blockers.append({"board": "platform", "id": card, "title": title, "assignee": b["id"], "kind": "", "cat": "technical",
+                             "ageDays": 3, "stale": False, "since": now - 3 * 86400, "recurrences": 0, "reason": REASONS["technical"][0],
+                             "body": "Acceptance criteria: see the linked spec.", "comment": None, "openParents": [],
+                             "actions": ALLOWED["technical"], "remote": False})
+        b.update(openQuests=len(b["quests"]), quest=b["quests"][0]["title"] if b["quests"] else "")
+    _mark_stale_session(live, now)
+
+
+def _stable_number(text: str) -> int:
+    """A stable number from a string (the builtin hash() changes per process)."""
+    return sum(ord(ch) * 31 ** i for i, ch in enumerate(text))
+
+
+def _demo_roster() -> dict:
+    roster = json.loads(Path(__file__).with_name("roster.example.json").read_text(encoding="utf-8"))
+    # Explicit overrides demonstrate roles that are not inferred from profile ids.
+    variants = {"dev-b": "scribe", "trial-model": "rogue", "remote-ops": "medic"}
+    for bot in roster["bots"]:
+        if bot["id"] in variants:
+            bot.setdefault("sprite", variants[bot["id"]])
+    return roster
+
+
+def _mark_stale_session(live: dict, now: float) -> None:
+    session = next((s for bot in live.values() for s in bot["sessions"]), None)
+    if session is not None:
+        session.update(stale=True, lastAt=now - 900)
 
 
 def _reactor() -> dict:

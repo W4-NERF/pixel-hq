@@ -8,7 +8,7 @@ from pixelhq import config
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_DEFAULTS = {
-    "locale": "en-GB", "timezone": "UTC", "theme_label": "PIXEL HQ", "operator_name": "operator",
+    "locale": "en-GB", "timezone": "UTC", "theme_label": "PIXEL HQ", "appearance": "auto", "operator_name": "operator",
     "orchestrator_profile": "default", "reviews_path": "", "legacy_ledger_path": "", "kanban_xp": True,
     "xp_pass": 10, "xp_revise": 3, "xp_fail": -5, "stale_days": 14, "exclude_boards": [],
     "needs_input_keywords": ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"],
@@ -16,12 +16,12 @@ EXPECTED_DEFAULTS = {
 }
 
 
-def test_manifest_has_all_18_settings_with_typed_defaults_and_descriptions():
+def test_manifest_has_all_19_settings_with_typed_defaults_and_descriptions():
     import yaml
 
     manifest = yaml.safe_load((ROOT / "plugin.yaml").read_text(encoding="utf-8"))
     schema = manifest["config_schema"]
-    assert len(schema) == 18
+    assert len(schema) == 19
     assert schema.keys() == EXPECTED_DEFAULTS.keys()
     assert config.DEFAULTS == EXPECTED_DEFAULTS
     types = {str: "str", int: "int", bool: "bool", list: "list", dict: "dict"}
@@ -39,16 +39,45 @@ def test_example_uses_the_canonical_flat_keys():
     assert example == EXPECTED_DEFAULTS
 
 
+@pytest.mark.parametrize("value", ["auto", "dark", "light", "invalid", "", "LIGHT", 1, True, None, [], {}])
+@pytest.mark.parametrize("source", ["file", "hermes"])
+def test_appearance_is_validated_coerced_and_exposed(config_files, monkeypatch, value, source):
+    settings = {"appearance": value}
+    if source == "file":
+        (config_files / "config.json").write_text(json.dumps(settings), encoding="utf-8")
+    else:
+        monkeypatch.setattr(config, "load_config_readonly", lambda: {
+            "plugins": {"entries": {"pixel-hq": {"settings": settings}}}})
+    cfg = config.load()
+    valid = value in ("auto", "dark", "light")
+    expected = value if valid else "auto"
+    assert cfg["appearance"] == expected
+    assert config.public(cfg, {"rooms": [], "bots": []})["appearance"] == expected
+    assert bool(cfg["warnings"]) is not valid
+    if not valid:
+        assert cfg["warnings"][0].startswith("appearance: expected ")
+        assert cfg["config_error"] == cfg["warnings"][0]
+
+
+def test_appearance_settings_precedence_and_invalid_override(config_files, monkeypatch):
+    assert config.load()["appearance"] == "auto"
+    (config_files / "config.json").write_text('{"appearance":"dark"}', encoding="utf-8")
+    assert config.load()["appearance"] == "dark"
+    settings = {"appearance": "light"}
+    monkeypatch.setattr(config, "load_config_readonly", lambda: {
+        "plugins": {"entries": {"pixel-hq": {"settings": settings}}}})
+    assert config.load()["appearance"] == "light"
+    settings["appearance"] = "unknown"
+    assert config.load()["appearance"] == "auto"
+
+
 @pytest.fixture
 def config_files(tmp_path, monkeypatch):
     root = tmp_path / "hermes"
     data = root / "plugin-data" / "pixel-hq"
     data.mkdir(parents=True)
-    checkout = tmp_path / "checkout"
-    checkout.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(root))
-
-    monkeypatch.setattr(config, "_DIRS", [data, checkout])
+    monkeypatch.setattr(config, "_DIRS", [data])
     return data
 
 

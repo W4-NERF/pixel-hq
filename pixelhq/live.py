@@ -14,17 +14,12 @@ import sys
 import time
 from pathlib import Path
 
-if __package__:
-    from . import config as cfgmod, dbutil, profiles
-    from .collect import roster_bots
-    from .common import boards, clip, state_db
-else:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import config as cfgmod
-    import dbutil
-    import profiles
-    from collect import roster_bots
-    from common import boards, clip, state_db
+if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/live.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "pixelhq"
+from . import config as cfgmod, dbutil, profiles
+from .collect import roster_bots
+from .common import boards, clip, state_db
 
 ACTIVE_S = 10 * 60      # a session counts as active if something happened in the last 10 min
 STALE_STEP_S = 5 * 60   # a "running …" step without progress for > 5 min → flagged

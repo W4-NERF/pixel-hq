@@ -9,23 +9,17 @@ from __future__ import annotations
 
 import datetime as dt
 import contextlib
-import importlib.util
 import json
 import os
 import re
 import shutil
 import sqlite3
 import subprocess
-import sys
 from pathlib import Path
 
+from . import config as cfgmod, dbutil
+
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-if __package__:
-    from . import config as cfgmod, dbutil
-else:
-    import config as cfgmod
-    import dbutil
 
 # No HERMES_HOME override here: the hermes launcher pins the root home, so the CLI always writes to the
 # REAL boards. Test only on a dedicated sandbox board whose cards have no assignee.
@@ -39,10 +33,8 @@ LABEL = {"answer": "Answer & unblock", "retry": "Retry", "comment": "Comment", "
 
 
 def _collect():
-    spec = importlib.util.spec_from_file_location("pixelhq_collect_actions", HERE / "collect.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    from . import collect
+    return collect
 
 
 def _hermes() -> list[str]:
