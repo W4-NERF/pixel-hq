@@ -81,7 +81,7 @@ round-4 rule that the plugin never writes another profile's files itself.
 
 - README: new section "Several hosts" with the operator recipe: (1) install Pixel HQ (or only its repository) on the
   remote host; (2) a dedicated SSH key with `command="python3 /path/to/pixelhq/export.py --label <name>",no-pty,
-  no-port-forwarding,no-agent-forwarding,no-X11-forwarding,restrict` in the remote `authorized_keys`; (3) an SSH config
+  no-port-forwarding,no-agent-forwarding,no-X11-forwarding,restrict` as key options on the remote account; (3) an SSH config
   alias on the local host; (4) `remote_sources: ["ssh:<alias>"]`. Mention multi-home servers (`--home` per home,
   `--kanban-db` for shared boards) and the read permissions the export user needs.
 - Disclosure: SSH network access only to configured sources, only with the fixed command, only while snapshots are

@@ -317,8 +317,9 @@ escaped, and it never becomes part of a prompt.
    Python 3.11+ with PyYAML (no Hermes plugin enablement, no gateway). Test it there first:
    `python3 -B /path/to/pixelhq/export.py --label atlas | head -c 300`.
 2. **Create a dedicated SSH key** for this purpose (for example `ssh-keygen -t ed25519 -f ~/.ssh/pixelhq_atlas`
-   on the local host) and add the public key to `~/.ssh/authorized_keys` of the account that can read the Hermes
-   homes on the remote host, with a forced command in front of it (one line):
+   on the local host). On the remote host, register its public key for the account that can read the Hermes homes,
+   restricted by OpenSSH key options to a forced command (one line in that account's key list; the options are
+   described in `man sshd`):
 
    ```
    command="python3 -B /path/to/pixelhq/export.py --label <name>",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,restrict ssh-ed25519 AAAA… pixelhq
