@@ -18,7 +18,7 @@ from pixelhq.demo import snapshot as demo_snapshot
 from tests.test_scoring_collect import collector
 
 ROOT = Path(__file__).resolve().parents[1]
-BOT_KEYS = ("id", "cls", "title", "zone", "loc", "color", "leader", "remote", "sprite")
+BOT_KEYS = ("id", "cls", "title", "zone", "loc", "color", "leader", "remote", "sprite", "source")
 
 PRELUDE = """
 const root=document.getElementById('roster-editor');
@@ -64,10 +64,14 @@ def run_editor(tmp_path, probe, *, data=None):
 
 
 def base(data=None) -> dict:
-    """The roster the editor starts from: the snapshot's rooms and the schema keys of its bots."""
+    """The roster the editor starts from: the snapshot's rooms and the schema keys of its bots.
+
+    A bot of another host is keyed `<source>/<id>` in the snapshot; the roster names it by its own id plus `source`.
+    """
     snap = data or demo_snapshot()
+    shown = [dict(b, id=b["name"]) if b.get("source") and b.get("name") else b for b in snap["bots"]]
     return {"rooms": copy.deepcopy(snap["cfg"]["rooms"]),
-            "bots": [{k: b[k] for k in BOT_KEYS if k in b} for b in snap["bots"]]}
+            "bots": [{k: b[k] for k in BOT_KEYS if k in b} for b in shown]}
 
 
 def accepted(tmp_path, payload: dict, snap=None) -> None:
@@ -236,6 +240,13 @@ assert.equal(q('[data-roster-zone-quarantine]',zone('ops')).checked,true);
     assert got == want
 
 
+def local_only() -> dict:
+    """The demo snapshot without the bots of its two sources (their department would not be empty)."""
+    snap = demo_snapshot()
+    snap["bots"] = [b for b in snap["bots"] if not b.get("source")]
+    return snap
+
+
 def test_department_remove_when_empty(tmp_path):
     got = edit(tmp_path, """
 addDept('temp','Temporary');
@@ -245,8 +256,8 @@ assert.equal(zone('temp'),undefined);
 q('[data-roster-remove-bot]',bot('remote-ops')).onclick();
 assert.equal(q('[data-roster-remove-zone]',zone('remote')).disabled,false,'empty once its bot is gone');
 q('[data-roster-remove-zone]',zone('remote')).onclick();
-""")
-    want = base()
+""", data=local_only())
+    want = base(local_only())
     want["rooms"][1]["zones"] = []
     want["bots"] = [b for b in want["bots"] if b["id"] != "remote-ops"]
     assert got == want

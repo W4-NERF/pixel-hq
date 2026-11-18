@@ -33,7 +33,7 @@ def test_demo_reports_signed_raw_source_xp_without_distributing_bucket_floors():
     data = snapshot(seed=6)
     assert any(bot["xp"] == 0 and bot["f"] > 0 for bot in data["bots"])
     weights = data["cfg"]["xp"]
-    for bot in data["bots"]:
+    for bot in (b for b in data["bots"] if not b.get("source")):  # bots of other hosts carry the document's XP
         expected_sources = {
             source: sum(counts[verdict] * weights[verdict] for verdict in ("pass", "revise", "fail"))
             for source, counts in bot["bySource"].items()

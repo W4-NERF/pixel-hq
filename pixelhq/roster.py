@@ -8,12 +8,12 @@ import stat
 import tempfile
 from pathlib import Path
 
-from .config import SPRITE_VARIANTS, TEXT_RULE, text_rejected
+from .config import SOURCE_RE, SPRITE_VARIANTS, TEXT_RULE, text_rejected
 from .profiles import root_home
 
 ROOM_KEYS = ("id", "label", "main", "zones", "note")
 ZONE_KEYS = ("id", "label", "quarantine")
-BOT_KEYS = ("id", "cls", "title", "zone", "loc", "color", "leader", "remote", "sprite")
+BOT_KEYS = ("id", "cls", "title", "zone", "loc", "color", "leader", "remote", "sprite", "source")
 MAX_ROOMS, MAX_ZONES, MAX_BOTS = 8, 24, 200
 
 
@@ -44,10 +44,20 @@ def _flags(value: dict, fields, prefix: str) -> None:
             _require(type(value[field]) is bool, prefix + "." + field, "expected a boolean")
 
 
-def _unique_id(value: dict, field: str, seen: set, pattern=ID_RE) -> None:
+def _unique_id(value: dict, field: str, seen: set, pattern=ID_RE, key: str = "") -> None:
+    """Ids are unique per source: a remote bot of one host may share its name with a local one or another host's."""
     _id(value.get("id"), field, pattern)
-    _require(value["id"] not in seen, field, "duplicate id")
-    seen.add(value["id"])
+    unique = f"{key}/{value['id']}" if key else value["id"]  # ids never hold "/", so the two forms cannot meet
+    _require(unique not in seen, field, "duplicate id")
+    seen.add(unique)
+
+
+def _source(bot: dict, prefix: str) -> None:
+    """``source`` (round 5 §2) names the host a ``remote: true`` entry belongs to; nothing else may carry it."""
+    if "source" in bot:
+        _require(bot.get("remote") is True, prefix + ".source", "only a remote bot can name a source")
+        _require(isinstance(bot["source"], str) and SOURCE_RE.fullmatch(bot["source"]) is not None,
+                 prefix + ".source", "use 1–32 lower-case letters, digits or ._- only")
 
 
 def _entry(value, prefix: str) -> str:
@@ -88,7 +98,8 @@ def _bots(bots, zones: set, profiles) -> None:
     ids, leaders = set(), 0
     for index, bot in enumerate(bots):
         prefix = _entry(bot, f"bots[{index}]")
-        _unique_id(bot, prefix + ".id", ids)
+        _source(bot, prefix)
+        _unique_id(bot, prefix + ".id", ids, key=bot.get("source", ""))
         for field in ("cls", "title"):
             _text(bot.get(field), prefix + "." + field)
         if "loc" in bot:

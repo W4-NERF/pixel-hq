@@ -107,4 +107,7 @@ function toggleLayoutEdit() {
   }
   renderLayoutBar();
   renderFloor();
+  if (!layoutEdit && sel && !botByKey(sel)) {
+    office();  // leaving the editor: a selection that only the draft held moves on to a bot of the snapshot
+  }
 }

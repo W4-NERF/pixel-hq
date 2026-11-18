@@ -34,7 +34,7 @@ any profile that should see it: `hermes -p <profile> plugins enable pixel-hq`.
 ## Platforms
 
 Versions reach the plugin catalog through a reviewed SHA-bump PR, so the catalog can lag behind this
-repository. As of **2026-11-12** the catalog lists **1.3.0**; 1.3.1 has been submitted.
+repository. As of **2026-11-18** the catalog lists **1.3.1**; 1.4.0 has been submitted.
 
 | Platform | Status |
 |---|---|
@@ -131,7 +131,7 @@ and storage are described in the [disclosure](#what-it-reads-and-writes-disclosu
 
 ## Settings
 
-Open **Settings → Plugins → Pixel HQ** in Desktop. Hermes stores the 19 optional settings under
+Open **Settings → Plugins → Pixel HQ** in Desktop. Hermes stores the 22 optional settings under
 `plugins.entries.pixel-hq.settings` in its `config.yaml`, outside the plugin so updates do not overwrite
 them. The table is generated from [`plugin.yaml`](plugin.yaml) by `python3 tools/settings_table.py`;
 `tests/test_readme_settings.py` checks it against the tool's output. Defaults below use JSON notation.
@@ -158,6 +158,9 @@ them. The table is generated from [`plugin.yaml`](plugin.yaml) by `python3 tools
 | `metrics_prefix` | `str` | `"vllm"` | Serving metric family prefix used in Prometheus queries. |
 | `model_endpoint` | `str` | `""` | OpenAI-compatible base URL for model discovery, or empty to disable model requests. |
 | `node_aliases` | `dict` | `{}` | Mapping from Prometheus instance labels to reactor display names. |
+| `remote_sources` | `list` | `[]` | Other hosts to show, read-only: each entry is ssh:<destination> (an SSH destination or alias, fixed command) or file:<name> (a JSON document under plugin-data/pixel-hq/remote/). |
+| `remote_timeout_s` | `int` | `8` | Seconds to wait for remote sources during one snapshot, clamped to 2-30. |
+| `remote_stale_after_s` | `int` | `300` | Seconds after which a remote document counts as stale. |
 <!-- settings-table:end -->
 
 For headless setups, copy [`pixelhq/config.example.json`](pixelhq/config.example.json) to
@@ -292,6 +295,114 @@ submits a prompt and never touches any other profile setting.
 On the standalone page the Config section shows synthetic demo data, read-only; editing and the history
 need Hermes Desktop.
 
+## Several hosts
+
+Pixel HQ can show the bots, activity and blocked Kanban cards of **other machines** (for example a workstation
+and a server) next to the local ones. This is **read-only**: remote bots have no Talk, Open, Rate, triage or
+SOUL editing; their character card says where to act instead (“Runs on <source> — actions are available on that
+host.”). The transport is SSH with a **fixed command**, or a JSON file you sync yourself. It is off by default
+(`remote_sources` is empty) and the plugin never stores or handles credentials: your own `ssh` and its
+configuration do the connecting.
+
+How it works: the remote host runs the **exporter** (`pixelhq/export.py`), which prints one JSON document
+(schema `pixelhq-remote/1`) with bots, blocked cards and board counts. The exporter writes nothing, leaves out tool
+arguments by default and omits SOUL, config and review content. The local Pixel HQ fetches that document while it
+collects a snapshot (so at most once per snapshot cache period, never by a timer or background loop), validates
+it and merges it. Everything in it is treated as untrusted data: it is schema-checked, size-limited, clipped and
+escaped, and it never becomes part of a prompt.
+
+**Operator recipe**
+
+1. **Install Pixel HQ on the remote host.** The exporter needs only a checkout of this repository and
+   Python 3.11+ with PyYAML (no Hermes plugin enablement, no gateway). Test it there first:
+   `python3 -B /path/to/pixelhq/export.py --label atlas | head -c 300`.
+2. **Create a dedicated SSH key** for this purpose (for example `ssh-keygen -t ed25519 -f ~/.ssh/pixelhq_atlas`
+   on the local host) and add the public key to `~/.ssh/authorized_keys` of the account that can read the Hermes
+   homes on the remote host, with a forced command in front of it (one line):
+
+   ```
+   command="python3 -B /path/to/pixelhq/export.py --label <name>",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,restrict ssh-ed25519 AAAA… pixelhq
+   ```
+
+   Replace `<name>` with the label the host should show (`[a-z0-9][a-z0-9._-]{0,31}`). The key can then run
+   only the exporter, whatever the client asks for. The supported entry point is the script with `-B` (no bytecode
+   files). `python3 -B -m pixelhq.export` is equivalent; without `-B`, `-m` imports the package before the exporter can
+   stop Python from writing `.pyc` files, so a cold start may create `__pycache__` files next to the checkout (accepted,
+   they hold no data).
+3. **Add an SSH config alias on the local host** (`~/.ssh/config`), so the plugin only ever needs a name:
+
+   ```
+   Host atlas-export
+       HostName atlas.example.net
+       User pixelhq
+       IdentityFile ~/.ssh/pixelhq_atlas
+       IdentitiesOnly yes
+   ```
+
+   Connect once by hand (`ssh -T atlas-export`) so the host key is known; the plugin calls `ssh` with
+   `BatchMode=yes` and cannot answer prompts.
+4. **Configure the source** in **Settings → Plugins → Pixel HQ**, or in `config.json`:
+
+   ```json
+   { "remote_sources": ["ssh:atlas-export"] }
+   ```
+
+   `ssh:<destination>` takes an SSH destination or alias (`[user@]host`, letters, digits, `.`, `_`, `@`, `-`, no
+   leading `-`, up to 128 characters). `file:<name>` reads `plugin-data/pixel-hq/remote/<name>.json` under the root
+   Hermes home instead (a regular file, no symlink, at most 1 MiB) — for hosts you cannot reach by SSH, with the
+   file synced by other means (for example `python3 pixelhq/export.py > atlas.json` on a schedule you run).
+   `remote_timeout_s` (default 8, clamped 2–30) bounds how long a snapshot waits for all sources together;
+   `remote_stale_after_s` (default 300) is the age after which a document counts as stale.
+
+**What you see.** Remote bots carry a host badge (the source label) on the desk, character card, leaderboard row and
+live row, and their data shows its age (“as of 40 s ago”). The age is the document's own `generated` time, for SSH and
+file sources alike, never the time it was received; a `generated` value more than 120 seconds ahead of the local clock
+makes the document invalid, as does one before 1970-01-01. A remote bot whose document is older than `remote_stale_after_s` is never shown as
+working: it gets a `stale` badge. The Blocked tab lists each source's cards in a read-only section of their own. The
+footer has one line per source: `ok · 35 s`, `stale · 12 min`, `unreachable (timeout)` or `invalid (reason)`. A
+source that fails keeps its last good document, in memory only, with its age. Remote bots are keyed
+`<source>/<id>`, so a remote `default` never collides with a local one; in `roster.json`, an entry with
+`remote: true` may carry `source`. Remote bots without a roster entry are placed like other recruits and flagged
+`auto`.
+
+**Servers with several Hermes homes or shared boards.** Pass `--home PATH` once per Hermes home and
+`--kanban-db PATH` once per board database that lies outside those homes, in the forced command. On a server with one
+Unix user per bot, give each bot home as `--home PATH=NAME[,NAME...]` so only the listed profiles of that home are read:
+every home has a root `default` profile that such a setup does not use, and without the filter the document would carry
+a `duplicate profile default` warning and the order of the `--home` options would decide which `default` is shown.
+
+```
+command="python3 -B /path/to/pixelhq/export.py --label <name> --home /home/gateway-user/.hermes --home /home/bot-a/.hermes=bot-a --home /home/bot-b/.hermes=bot-b --kanban-db /srv/shared-board/kanban.db",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,restrict
+```
+
+The filter splits on the **last** `=` (so a path may contain `=` when a `=NAME` suffix is given), each `NAME` must be a
+valid profile name (`[A-Za-z0-9._-]{1,64}`, otherwise the exporter exits with code 1), and a listed name the home does
+not have is only a warning (`profile <name> not found in home <n>`). Profiles are read from every home; a profile
+name that appears in two homes is kept once (first home) and listed in the document's warnings. Without `--home` the
+exporter reads the usual root Hermes home (`$HERMES_HOME`, default
+`~/.hermes`). The exporter's `--include-tool-args` flag adds the main argument of each bot's last tool call; it is
+off by default because arguments can contain sensitive text; enable it only for a host whose Pixel HQ reader you
+trust.
+
+**Read permissions.** The exporting account needs read access, and nothing more, to each Hermes home it exports:
+the profile directories with `config.yaml` / `profile.yaml`, `gateway.pid` and `state.db`, the Kanban databases
+under `kanban/boards/`, any `--kanban-db` file, the Pixel HQ settings of that home (`plugin-data/pixel-hq/config.json`
+and the plugin settings in its `config.yaml`) and the review ledgers those settings name (read to compute XP;
+their content is not exported). It never needs write
+access for its own sake: every SQLite file is opened read-only (`mode=ro`), so reading never creates a file. It reads
+bytes 18–19 of the database header first: a rollback-journal database is read normally (shared locks, so a writer
+is never read half-way); a WAL database that has neither a `-wal` nor a `-shm` file is read as `immutable=1`; one with
+both is read normally. A WAL database with a `-wal` file but no `-shm` file (left over after a crash or a copy) is read
+as `immutable=1`, so the log is not read and the data may be older: the document then carries the warning
+`write-ahead log without its -shm file was not read; data may be older`, because a file the exporter created could lock
+the bot out of its own database. Run it as the account that runs Hermes, or as one that has been given read access to
+those files. A database that a running Hermes holds open in WAL mode has those side files; they must then be
+readable, and reading it updates SQLite's shared-memory index in the existing `-shm` file, as every SQLite reader does
+(no file is created). Tested on a Linux server with several Hermes homes and a shared board, run as root through
+`sudo` with a fixed command; other accounts were not tested, so check with the manual test from step 1 under the exact
+account. A problem shows as an exit code 1 and a message on stderr from the exporter, and as `unreachable (exit 1)` in
+the footer.
+
 ## What it reads and writes (disclosure)
 
 **Rate**: choose **pass**, **revise** or **fail**, adjust the four 1–5 scores (default 4) and reference,
@@ -305,11 +416,26 @@ sent”. The footer reports signed raw Kanban/review XP and source warnings.
   and `state.db` (sessions, last activity, last tool call); `kanban/boards/*/kanban.db` below the root
   Hermes home (cards, events, comments, dependencies); settings, roster and quality ledgers. Profile
   discovery reads directories directly, without running `hermes profile list`.
+- **Other hosts** (only with `remote_sources` set, see [Several hosts](#several-hosts)): one `pixelhq-remote/1` JSON
+  document per source, either the output of the fixed SSH command or `plugin-data/pixel-hq/remote/<name>.json`
+  (regular file, no symlink, at most 1 MiB). Its content is untrusted input: schema-checked, size-limited, clipped and
+  escaped, read-only in every view, and never put into a triage briefing or any other prompt. The last good document
+  of a source is kept in memory only, never on disk.
 - **Profile data** (Desktop only, read): the Config section asks Hermes' `profiles.describe` for the SOUL,
   the model pin, skills, toolsets and MCP server names of a bot when you open it. Remote bots are asked only
   through a Desktop connection that Hermes itself provides. Nothing else of a profile is read this way.
-- **Network**: only the Prometheus and model endpoints you configure, none by default. The new features
-  add no network call by the plugin; their requests go through the Hermes Desktop connection.
+- **Network**: only the Prometheus and model endpoints you configure, none by default, and — only if you list
+  `ssh:` entries in `remote_sources` — SSH to exactly those destinations. That call is always
+  `ssh -o BatchMode=yes -o ConnectTimeout=5 -T <destination> pixelhq-export`, run without a shell; nothing else is
+  ever executed, and the remote key's forced command decides what actually runs there. The `ssh` child gets an
+  explicit environment: only `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE` and `SSH_AUTH_SOCK`
+  (each only if set), nothing else from the backend's environment. It happens only while a snapshot
+  is being collected (never from a timer or background loop), its output is limited to 1 MiB, and the plugin stores no
+  credentials (your own `ssh` configuration does the authentication). The other features add no network call by the
+  plugin; their requests go through the Hermes Desktop connection.
+- **The exporter** (`pixelhq/export.py`, run on the other host): read-only, writes nothing (no cache, plugin data
+  or log; every SQLite file is opened read-only, never creating a file: a WAL database with a `-wal` but no `-shm` file is read without its log and reported with a warning), prints one JSON document to stdout, and omits tool arguments, SOUL,
+  configuration and review content unless you pass `--include-tool-args` in its forced command (tool arguments only).
 - **Kanban writes**: only on your confirmed action, through the official CLI
   `hermes kanban --board … comment|unblock|archive`, never by database writes and never `archive --rm`.
   Each action is logged in `var/actions.jsonl` in the plugin checkout; archiving first copies the card's
@@ -340,7 +466,9 @@ sent”. The footer reports signed raw Kanban/review XP and source warnings.
 - **Session actions**: Open navigates to a session; Talk opens a new chat; Ask for status prepares and
   focuses a draft only when empty. These actions do not submit a prompt. Missing Desktop capabilities
   return “not supported by this Hermes Desktop version”.
-- **Remote bots** are included only through Desktop connections (see [Bot configuration](#bot-configuration)).
+- **Bots on other Desktop connections** are reachable for the Config section only through Desktop connections (see
+  [Bot configuration](#bot-configuration)). Bots of `remote_sources` hosts are different: read-only, no action of
+  any kind is sent for them, and the plugin never writes another host's files.
 - No telemetry, self-update or credentials. Untrusted card/session titles, tool arguments and review
   references are clipped and escaped before rendering. The UI runs in a scripts-only sandboxed iframe;
   page-local drafts and dismissals are not browser storage.

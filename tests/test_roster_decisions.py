@@ -86,6 +86,10 @@ console.log('PAYLOAD:'+JSON.stringify(body));
         overrides = {"dev-b": "scribe", "trial-model": "rogue", "remote-ops": "medic"}
         if bot["id"] in overrides:
             bot["sprite"] = overrides[bot["id"]]
+    remote = [bot for bot in body["roster"]["bots"] if bot.get("source")]  # the demo's two sources: saved by id + source
+    assert {(bot["source"], bot["id"]) for bot in remote} == {("atlas", "ops-bot"), ("atlas", "build-bot"), ("atlas", "default"),
+                                                             ("harbor", "harbor-bot"), ("harbor", "scout-bot")}
+    body["roster"]["bots"] = [bot for bot in body["roster"]["bots"] if not bot.get("source")]
     assert body["roster"] == expected
     profiles = {bot["id"]: {} for bot in expected["bots"] if not bot.get("remote")}
     assert roster.save(body, {"hermes_home": str(tmp_path)}, profiles)["ok"]

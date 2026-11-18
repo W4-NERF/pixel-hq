@@ -4,6 +4,64 @@ All notable changes to Pixel HQ are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version dates below come from git history;
 verification limits are stated separately from implemented changes.
 
+## [1.4.0] - 2026-11-18
+
+### Added
+
+- **Several hosts** (read-only, off by default): the bots, activity and blocked Kanban cards of other machines are shown
+  next to the local ones. New settings `remote_sources` (entries `ssh:<destination>` or `file:<name>`),
+  `remote_timeout_s` (default 8, clamped 2–30) and `remote_stale_after_s` (default 300). See *Several hosts* in the README.
+- **Exporter** `pixelhq/export.py` (`python3 -B pixelhq/export.py`; `python3 -B -m pixelhq.export` is equivalent): prints one `pixelhq-remote/1` JSON document for a host and
+  writes nothing. `--home` (repeatable) and `--kanban-db` (repeatable) cover servers with several Hermes homes or shared
+  boards, `--label` names the source, `--include-tool-args` is off by default. Limits: 200 bots, 500 blockers, 64 boards,
+  1 MiB; larger data is truncated with a warning.
+- **Exporter home filter**: `--home PATH=NAME[,NAME...]` reads only the listed profiles of a home (skips its unused root `default`; an unknown name is a warning).
+- **Remote sources in the collector**: over SSH the plugin runs one fixed command without a shell
+  (`ssh -o BatchMode=yes -o ConnectTimeout=5 -T <destination> pixelhq-export`); the remote key's forced command decides
+  what runs there. `file:<name>` reads `plugin-data/pixel-hq/remote/<name>.json`. Sources are fetched in parallel while a
+  snapshot is collected (no timer or background loop). A failing source keeps its last good document in memory, with its age.
+- **UI**: host badge on desks, character cards, leaderboard rows and live rows; data age (“as of 40 s ago”); a `stale`
+  badge instead of “working” for stale data; a read-only character card (“Runs on <source> — actions are available on that
+  host.”); a read-only section per source in the Blocked tab; one footer line per source (`ok`, `stale`, `unreachable`,
+  `invalid`); remote members and cards count in the department numbers. The standalone demo shows two synthetic sources.
+- Roster entries with `remote: true` accept an optional `source`.
+
+### Changed
+
+- Remote bots are keyed `<source>/<id>` in the snapshot, the roster matching and the page, so a remote `default` never
+  collides with the local one. Lookups by bot id in the office floor, the roster editor and the department zones follow
+  that key.
+- Remote data is untrusted: every field is type-checked, clipped and escaped, unknown fields are dropped, and no remote
+  text is used in a triage briefing or any other prompt.
+- The disclosure now lists SSH to the configured sources (fixed command, only while snapshots are collected) and the
+  exporter. `SECURITY.md` lists 1.4.x as supported.
+
+### Verification
+
+- Offline test suite: 2551 Python tests, no network. The SSH call is covered with `subprocess.run` replaced by a fake:
+  the exact argument list without a shell, the explicit environment, destination validation, timeout, non-zero exit,
+  oversized output, invalid JSON, wrong schema and hostile strings. The exporter is covered on fixture homes, including
+  two homes, the `--home` filter, an extra board database, duplicate profile names, tool-argument redaction, the limits,
+  rollback-journal and WAL databases with and without their side files, and a before/after comparison of the fixture
+  tree that shows nothing is written. The page is covered by the DOM harness (badges, read-only card, Blocked section
+  without buttons, stale handling, footer lines, escaping of hostile remote strings, the standalone demo with two
+  sources).
+- An independent review and a second review of the fixes, with 21 executable probes (SSH argument list and
+  environment, option injection in destinations, data age, `source/id` collisions with local ids, roster saves, remote
+  data in prompts, WAL databases without their `-shm` file, `generated` before 1970), all passing.
+- On a real Linux server with several Hermes homes (one Unix account per bot plus a gateway account) and a shared Kanban
+  board: the exporter ran as root through `sudo` behind an SSH forced command (`restrict`, `from=`), and the collector
+  fetched it with its fixed `ssh` call. The source reads `ok`; bots and blocked cards appear under their `source/id` keys;
+  existing roster entries with `remote: true` match. No database file or side file was created or changed (name, owner
+  and mode compared before and after) and no `__pycache__` was written. Another command, a PTY, local and remote port
+  forwarding and `sudo` with arguments were refused by the forced-command setup.
+- By hand in Chromium, with the real `desktop/plugin.js` and the page in a `sandbox="allow-scripts"` iframe against a
+  simulated Hermes host: host badges, the read-only character card (no host message for a remote bot), the per-source
+  Blocked sections without buttons, stale handling in the live tab, the footer lines, and a roster save that keeps
+  `source`.
+- **Not verified:** a real Hermes gateway and the Desktop app with this version; an exporter account other than root;
+  macOS and Windows beyond the CI demo render.
+
 ## [1.3.1] - 2026-11-12
 
 ### Fixed

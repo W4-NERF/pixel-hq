@@ -71,39 +71,45 @@ function liveTab() {
   const idle = [];
   DATA.bots.forEach((b) => {
     const v = liveOf(b.id);
-    if (v && v.active) {
+    if (isHostBot(b) ? liveStatus(b).status === 'running' : v && v.active) {
       act.push([b, v]);
     } else {
       idle.push([b, v]);
     }
   });
   tabEl.textContent = 'Live (' + act.length + ')';
+  dropIdleHostRows(new Set(act.filter(([b]) => isHostBot(b)).map(([b]) => b.id)));
   renderUnlessFocused(document.getElementById('lactive'), liveActive);
   document.getElementById('lidle').innerHTML = idle.map(([b, v]) => {
-    const l = v && v.last;
-    const z = v && v.remote
+    const z = isHostBot(b)
+      ? hostIdleText(b)
+      : v && v.remote
       ? 'remote host – Kanban status only'
-      : l
-      ? 'last seen ' + ago(l.at) + ' · ' + (l.title || l.step || l.source)
+      : v && v.last
+      ? 'last seen ' + ago(v.last.at) + ' · ' + (v.last.title || v.last.step || v.last.source)
       : v && v.error
       ? 'state.db: ' + v.error
       : 'no session found';
-    return '<div><span class="n">' + esc(b.id) + '</span><span class="z" title="' + esc(z) + '">' + esc(z) +
-      '</span></div>';
+    return '<div><span class="n">' + esc(botLabel(b)) + hostBadges(b) + '</span><span class="z" title="' + esc(z) + '">' +
+      esc(z) + '</span></div>';
   }).join('');
 }
 
 /* Active rows hold the review forms, so this part waits for the focus to leave (D8). */
 function liveActive() {
   const now = LIVE.generated;
-  const act = DATA.bots.map((b) => [b, liveOf(b.id)]).filter(([, v]) => v && v.active);
+  const act = DATA.bots.map((b) => [b, liveOf(b.id)]).filter(([b, v]) =>
+    isHostBot(b) ? liveStatus(b).status === 'running' : v && v.active
+  );
   document.getElementById('lactive').innerHTML = act.map(([b, v]) =>
-    '<div class="lc" style="border-left-color:' + safeColor(b.color) + '"><div class="h"><div class="holder">' +
-      sprite(b, 4) + '</div><div><div class="nm">' + esc(b.id) + '</div><div class="cl">' + esc(b.title) + ' · ' +
-      v.sessions.length + ' session' + (v.sessions.length === 1 ? '' : 's') +
-      (v.tasks.length ? ' · ' + v.tasks.length + ' card' + (v.tasks.length === 1 ? '' : 's') : '') +
-      '</div></div></div>' + v.sessions.map((s) => sessHtml(s, now, false, b.id)).join('') +
-      v.tasks.map((t) => taskHtml(t, now)).join('') + '</div>'
+    isHostBot(b)
+      ? hostLiveHtml(b)
+      : '<div class="lc" style="border-left-color:' + safeColor(b.color) + '"><div class="h"><div class="holder">' +
+        sprite(b, 4) + '</div><div><div class="nm">' + esc(b.id) + '</div><div class="cl">' + esc(b.title) + ' · ' +
+        v.sessions.length + ' session' + (v.sessions.length === 1 ? '' : 's') +
+        (v.tasks.length ? ' · ' + v.tasks.length + ' card' + (v.tasks.length === 1 ? '' : 's') : '') +
+        '</div></div></div>' + v.sessions.map((s) => sessHtml(s, now, false, b.id)).join('') +
+        v.tasks.map((t) => taskHtml(t, now)).join('') + '</div>'
   ).join('') ||
     '<div class="mut">no bot is working right now</div>';
   bindReviews(document.getElementById('lactive'));

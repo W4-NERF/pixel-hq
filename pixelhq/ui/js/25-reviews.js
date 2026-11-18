@@ -60,7 +60,7 @@ function reviewBody(key) {
 }
 
 function reviewHtml(agent, sessionId, ref) {
-  if (!EMBED) {
+  if (!EMBED || isHostKey(agent)) {
     return '';
   }
   const key = reviewKey(agent, sessionId);

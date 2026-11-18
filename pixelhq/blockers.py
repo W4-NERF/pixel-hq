@@ -12,6 +12,7 @@ import json
 import re
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 if __name__ == "__main__" and not __package__:  # run as a script: python3 pixelhq/blockers.py
@@ -89,16 +90,22 @@ def keyword_pattern(keywords) -> re.Pattern:
     return re.compile("|".join(parts) or r"(?!x)x", re.I)
 
 
-def read_blockers(cfg: dict | None = None, roster: dict | None = None) -> tuple[list, list]:
-    """Every blocked card on every board with reason, age, upstream cards and a category."""
+def read_blockers(cfg: dict | None = None, roster: dict | None = None,
+                  sources: Iterable[tuple[str, Path]] | None = None) -> tuple[list, list]:
+    """Every blocked card on every board with reason, age, upstream cards and a category.
+
+    ``sources`` replaces the boards of the configured home with explicit ``(slug, database)`` pairs (the exporter
+    reads several homes and extra databases); exclusions are then the caller's business.
+    """
     cfg = cfgmod.load() if cfg is None else cfg
     roster = cfgmod.load_roster() if roster is None else roster
     user_re = keyword_pattern(cfg["needs_input_keywords"])
     stale_days = cfg["stale_days"]
-    remote = {bot["id"] for bot in roster["bots"] if bot.get("remote")}
+    # R5-D1: only operator-written entries without a source mark a local assignee as remote; a bot of a source never does
+    remote = {bot["id"] for bot in roster["bots"] if bot.get("remote") and not bot.get("source")}
     out, errors = [], []
     now = time.time()
-    for board, db in boards(cfg):
+    for board, db in (boards(cfg) if sources is None else sources):
         try:
             blocked, by_event, by_comment, by_parent = _blocked_rows(db, board, errors)
             for tid, title, body, assignee, created, kind, rec, _status in blocked:

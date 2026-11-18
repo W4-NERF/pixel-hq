@@ -16,7 +16,8 @@ if __name__ == "__main__" and not __package__:  # run as a script: python3 pixel
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     __package__ = "pixelhq"
 from . import config as cfgmod
-from .collect import ALLOWED, achievements
+from . import remote, remote_merge, remote_schema
+from .collect import ALLOWED, _color_for, achievements
 from .scoring import level_of
 
 QUESTS = ["Rotate TLS certificates on the edge proxy", "Nightly backup verification report",
@@ -88,11 +89,7 @@ def snapshot(seed: int = 7) -> dict:
                                  "comment": {"author": r["id"], "text": "Work is done and verified; waiting for the gate.", "ts": now - 3600 * rnd.randint(1, 48)} if cat == "you" else None,
                                  "openParents": [{"id": f"t_{rnd.randrange(16**8):08x}", "title": rnd.choice(QUESTS), "status": "blocked"}] if cat == "upstream" else [],
                                  "actions": ALLOWED[cat], "remote": bool(r.get("remote"))})
-        for _ in range(rnd.randint(1, 3)):
-            kind = rnd.choice(["qc-pass", "qc-pass", "qc-pass", "qc-revise", "completed", "created", "blocked", "changes_requested"])
-            events.append({"ts": now - rnd.randint(300, 6 * 86400), "bot": r["id"], "kind": kind, "summon": kind.startswith("qc") and bool(r.get("leader")) and rnd.random() < .6,
-                           "source": "ui" if kind.startswith("qc") else "kanban", "selfReview": False,
-                           "text": rnd.choice(QUESTS) + (f" [{rnd.choice(boards)}/t_{rnd.randrange(16**8):08x}]" if not kind.startswith("qc") else "")})
+        events.extend(_demo_events(rnd, r, now, boards))
         sessions = []
         if status == "running":
             for k in range(rnd.randint(1, 2)):
@@ -112,13 +109,27 @@ def snapshot(seed: int = 7) -> dict:
                          "last": None if status == "running" else {"at": b["lastActivity"], "title": rnd.choice(QUESTS), "step": "", "source": "desktop"},
                          "error": None, "remote": bool(r.get("remote"))}
     _pin_floor_numbers(bots, blockers, live, now)
+    remote_part = _remote_snapshot(roster, cfg, now)
+    bots.extend(remote_part["bots"])
     events.sort(key=lambda e: e["ts"], reverse=True)
     order = {"you": 0, "technical": 1, "stale": 2, "unknown": 3, "upstream": 4}
     blockers.sort(key=lambda x: (order[x["cat"]], -x["ageDays"]))
     reactor = _reactor()
     return {"generated": now, "bots": bots, "reactor": reactor, "events": events[:40], "blockers": blockers, "boardErrors": [], "warnings": [],
             "unassigned": {}, "cfg": cfgmod.public(cfg, roster) | {"toolsDir": "<pixel-hq>/pixelhq"}, "collectMs": 12, "demo": True,
+            "remoteSources": remote_part["sources"], "remoteBlockers": remote_part["blockers"], "remoteBoards": remote_part["boards"],
             "live": {"generated": now, "ms": 3, "bots": live, "unassignedTasks": {}}, "demoProfiles": _demo_profiles(roster)}
+
+
+def _demo_events(rnd: random.Random, bot: dict, now: float, boards: list) -> list:
+    """One to three synthetic log events of a bot."""
+    events = []
+    for _ in range(rnd.randint(1, 3)):
+        kind = rnd.choice(["qc-pass", "qc-pass", "qc-pass", "qc-revise", "completed", "created", "blocked", "changes_requested"])
+        events.append({"ts": now - rnd.randint(300, 6 * 86400), "bot": bot["id"], "kind": kind, "summon": kind.startswith("qc") and bool(bot.get("leader")) and rnd.random() < .6,
+                       "source": "ui" if kind.startswith("qc") else "kanban", "selfReview": False,
+                       "text": rnd.choice(QUESTS) + (f" [{rnd.choice(boards)}/t_{rnd.randrange(16**8):08x}]" if not kind.startswith("qc") else "")})
+    return events
 
 
 # The Office floor shows members / active / blocked / average HP / XP per department. Whatever the seed draws, these bots are
@@ -146,6 +157,62 @@ def _pin_floor_numbers(bots: list, blockers: list, live: dict, now: float) -> No
                              "actions": ALLOWED["technical"], "remote": False})
         b.update(openQuests=len(b["quests"]), quest=b["quests"][0]["title"] if b["quests"] else "")
     _mark_stale_session(live, now)
+
+
+REMOTE_ZONE = "remote"  # the OUTPOST room of the example roster; the numbers of the other departments stay as they were
+REMOTE_ROLES = {"ops-bot": "Linux / Docker", "build-bot": "CI/CD", "default": "Chief of Staff", "harbor-bot": "Storage", "scout-bot": "Monitoring"}
+
+
+def _remote_doc(label: str, now: float, age: int, bots: list, cards: list, boards: list) -> dict:
+    """One synthetic ``pixelhq-remote/1`` document, cleaned by the same validator the collector uses."""
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - age))
+    return remote_schema.validate({"schema": remote_schema.SCHEMA, "source": label, "generated": stamp, "pixelhq": "1.4.0",
+                                   "bots": bots, "blockers": cards, "boards": boards, "warnings": []})
+
+
+def _remote_bot(name: str, status: str, generated: float, xp: int, hp: int, **more) -> dict:
+    """A bot of a synthetic document; its last activity lies 40 s before the document was generated, never after."""
+    return {"id": name, "model": "vendor/model-large", "status": status, "lastActive": int(generated) - 40, "xp": xp,
+            "level": level_of(xp)[0], "hp": hp, "cls": REMOTE_ROLES[name], **more}
+
+
+def _remote_card(board: str, number: int, title: str, category: str, assignee: str, age: int, reason: str) -> dict:
+    return {"board": board, "id": f"t_{number:08x}", "title": title, "category": category, "assignee": assignee,
+            "ageDays": age, "reason": reason}
+
+
+def _remote_snapshot(roster: dict, cfg: dict, now: float) -> dict:
+    """Two synthetic sources for the standalone demo: ``atlas`` answers (ok), ``harbor`` is 12 min old (stale).
+
+    The documents go through the collector's own merge (``remote_merge``), so the snapshot has the real shape.
+    """
+    atlas = _remote_doc("atlas", now, 35, [
+        _remote_bot("ops-bot", "running", now - 35, 640, 92, quest="Rotate the edge certificates", currentStep="tool running: terminal",
+                    lastTool="terminal"),
+        _remote_bot("build-bot", "blocked", now - 35, 330, 71, quest="Publish the nightly image"),
+        _remote_bot("default", "idle", now - 35, 210, 88)],
+        [_remote_card("platform", 0xA71A5001, "Publish the nightly image", "you", "build-bot", 3,
+                      "Waiting for approval: push the image to the public registry?"),
+         _remote_card("platform", 0xA71A5002, "Renew the monitoring token", "technical", "ops-bot", 6,
+                      "timed_out: elapsed 3640s > limit 3600s")],
+        [{"slug": "platform", "ready": 2, "running": 1, "blocked": 2, "todo": 4, "done24h": 7}])
+    harbor = _remote_doc("harbor", now, 720, [
+        _remote_bot("harbor-bot", "running", now - 720, 90, 80, quest="Verify the offsite backup", currentStep="tool running: read_file",
+                    lastTool="read_file"),
+        _remote_bot("scout-bot", "blocked", now - 720, 40, 60)],
+        [_remote_card("storage", 0x4A2B0001, "Replace the failed disk in the pool", "stale", "scout-bot", 21,
+                      "last comment: parked until the replacement part arrives")],
+        [{"slug": "storage", "ready": 0, "running": 1, "blocked": 1, "todo": 2, "done24h": 0}])
+    sources = [remote.Source(entry="ssh:atlas", name="atlas", kind="ssh", label="atlas", doc=atlas, observed=now - 35, state="ok"),
+               remote.Source(entry="file:harbor", name="harbor", kind="file", label="harbor", doc=harbor, observed=now - 720, state="ok")]
+
+    def recruit(key: str, role: str, notes: list) -> dict:
+        label, _, name = key.partition("/")
+        return {"id": name, "cls": role or "Hermes profile", "title": "Remote", "zone": REMOTE_ZONE, "loc": label,
+                "color": _color_for(key), "auto": True}
+
+    return remote_merge.merge(sources, roster, roster["bots"], recruit=recruit, stale_days=cfg["stale_days"],
+                              stale_after=cfg["remote_stale_after_s"], now=now, warnings=[])
 
 
 SKILL_POOL = ["web-search", "file-ops", "code-review", "summarise", "shell-safe", "diff-reader", "docs-writer", "log-triage",

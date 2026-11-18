@@ -107,6 +107,8 @@ class KanbanIndex:
                         self.events.append({"ts": float(ts or 0), "bot": bot, "kind": kind,
                                             "board": board, "id": eid,
                                             "text": clip(f"{clip(title, 90)} [{board}/{tid}]", 180)})
+        except dbutil.HeaderUnreadable:
+            pass  # the exporter names the board once (R5-D10)
         except (OSError, sqlite3.Error, TypeError, ValueError) as exc:
             self.warnings.append(clip(f"{board}: {exc}", 120))
 

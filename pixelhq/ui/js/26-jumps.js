@@ -23,8 +23,11 @@ function jumpBody(el) {
   return h;
 }
 
+/* A bot of another host is keyed "<source>/<id>"; a local profile name never contains a slash. Such a key gets no controls. */
+const isHostKey = (id) => String(id).includes('/');
+
 function jumpHtml(profile, sessionId, stale = false) {
-  if (!EMBED) {
+  if (!EMBED || isHostKey(profile)) {
     return '';
   }
   const key = jumpKey(profile, sessionId);

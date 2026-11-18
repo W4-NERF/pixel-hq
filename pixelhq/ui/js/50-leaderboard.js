@@ -25,7 +25,8 @@ function board() {
   document.getElementById('tb').innerHTML = rows.map((b, i) =>
     '<tr data-id="' + esc(b.id) + '"><td class="rk">' + (i + 1) +
       '</td><td><span style="position:relative;display:inline-block">' + sprite(b, 3) + '</span></td><td><b>' +
-      esc(b.id) + '</b><div class="mut" style="font-size:10px">' + esc(b.title) + '</div></td><td class="px">' +
+      esc(botLabel(b)) + '</b>' + hostBadges(b) + '<div class="mut" style="font-size:10px">' + esc(b.title) +
+      (isHostBot(b) ? ' · ' + esc(asOfText(b.asOf)) : '') + '</div></td><td class="px">' +
       Number(b.lvl) + '</td><td><span class="mini"><span class="bar xp" style="display:block"><b style="width:' +
       Number(b.xpPct) + '%"></b></span></span>' + fmtN(b.xp) + '</td><td><span class="mini"><span class="bar hp' +
       (b.hp != null && b.hp < 75 ? ' low' : '') + '" style="display:block"><b style="width:' + Number(b.hp ?? 0) +

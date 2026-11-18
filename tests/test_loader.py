@@ -14,7 +14,7 @@ from pixelhq.demo import snapshot as demo_snapshot
 from pixelhq.page import page_html
 
 ROOT = Path(__file__).resolve().parents[1]
-GENERIC = "config common profiles scoring dbutil collect live reviews roster soul_history actions page demo blockers".split()
+GENERIC = "config common profiles scoring dbutil collect live reviews roster soul_history actions page demo blockers export remote_schema remote remote_merge".split()
 
 
 def run(script, *args, cwd, env=None, timeout=60):

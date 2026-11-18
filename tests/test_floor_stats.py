@@ -62,8 +62,8 @@ assert.deepEqual(zoneHead('command').classes, ['m', 'a', 'b', 'h', 'x'], 'no blo
     rows = next(line for line in out.splitlines() if line.startswith("ROWS:"))
     assert rows == ("ROWS:" + '{"command":"1 · 1 · 0 · Ø 99% · 2.4k XP","ops":"4 · 1 · 1 · Ø 85% · 1.4k XP",'
                     '"lab":"2 · 1 · 1 · Ø 34% · 175 XP","quarantine":"1 · 1 · 0 · Ø 73% · 228 XP",'
-                    '"remote":"1 · 0 · 0 · Ø 92% · 349 XP","hq":"8 · 4 · 2 · Ø 72% · 4.2k XP",'
-                    '"outpost":"1 · 0 · 0 · Ø 92% · 349 XP"}')
+                    '"remote":"6 · 1 · 3 · Ø 81% · 1.7k XP","hq":"8 · 4 · 2 · Ø 72% · 4.2k XP",'
+                    '"outpost":"6 · 1 · 3 · Ø 81% · 1.7k XP"}')
 
 
 def test_stats_are_pure_and_an_empty_department_is_all_zero(tmp_path):
@@ -147,11 +147,11 @@ assert.equal(zoneStats('command', false).blocked, 1);
 assert.equal(zoneStats('lab', false).blocked, 1);
 assert.equal(zoneStats('quarantine', false).blocked, 0);
 assert.equal(roomStats('hq', false).blocked, 5);
-assert.equal(roomStats('outpost', false).blocked, 0, 'cards of an unknown assignee belong to no room');
+assert.equal(roomStats('outpost', false).blocked, DATA.remoteBlockers.length, 'cards of an unknown assignee belong to no room; the remote cards count for their bots');
 // the bot field "blocked" (a counter on the bot) is not the source: the cards are
 bot('security').blocked = 9; bot('remote-ops').blocked = 4;
 assert.equal(zoneStats('ops', false).blocked, 3);
-assert.equal(zoneStats('remote', false).blocked, 0);
+assert.equal(zoneStats('remote', false).blocked, DATA.remoteBlockers.length, 'the remote cards of the demo');
 DATA.blockers = undefined;
 assert.equal(zoneStats('ops', false).blocked, 0, 'a snapshot without cards');
 renderAll();
@@ -210,7 +210,7 @@ assert.deepEqual(zoneStats('lab', true), {members: 4, active: 2, blocked: 1, hp:
 const lab = rosterDraft.rooms[0].zones.splice(rosterDraft.rooms[0].zones.findIndex(z => z.id === 'lab'), 1)[0];
 rosterDraft.rooms[1].zones.push(lab);
 assert.equal(roomStats('hq', true).members, 5, 'hq lost lab (3 members and the draft-only bot)');
-assert.equal(roomStats('outpost', true).members, 1 + 4);
+assert.equal(roomStats('outpost', true).members, DATA.bots.filter(b => b.zone === 'remote').length + 4);
 // leaving edit mode: snapshot membership and rooms again
 toggle();
 assert.equal(zoneHead('ops').text, '4 · 1 · 1 · Ø 85% · 1.4k XP');
@@ -222,7 +222,8 @@ def test_demo_has_non_trivial_numbers_in_at_least_two_departments_for_any_seed()
     for seed in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         snap = snapshot(seed)
         zones = {}
-        for b in snap["bots"]:
+        local = [b for b in snap["bots"] if not b.get("source")]  # bots of other hosts have no live row (round 5)
+        for b in local:
             zones.setdefault(b["zone"], []).append(b)
         cards = [c["assignee"] for c in snap["blockers"]]
         rich = []
@@ -235,6 +236,7 @@ def test_demo_has_non_trivial_numbers_in_at_least_two_departments_for_any_seed()
                 rich.append(zone)
         assert len(rich) >= 2, (seed, rich)
         # the live rule and the snapshot status agree in the demo, and every card belongs to a bot of the roster
-        assert all((b["status"] == "running") == snap["live"]["bots"][b["id"]]["active"] for b in snap["bots"])
-        assert set(cards) <= {b["id"] for b in snap["bots"]}
-        assert all(b["blocked"] == sum(1 for a in cards if a == b["id"]) or b["status"] != "blocked" for b in snap["bots"])
+        assert all((b["status"] == "running") == snap["live"]["bots"][b["id"]]["active"] for b in local)
+        assert set(cards) <= {b["id"] for b in local}
+        assert all(b["blocked"] == sum(1 for a in cards if a == b["id"]) or b["status"] != "blocked" for b in local)
+        assert not set(snap["live"]["bots"]) & {b["id"] for b in snap["bots"] if b.get("source")}

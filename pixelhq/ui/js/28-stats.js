@@ -27,7 +27,8 @@ function statsOfBots(bots) {
   return {
     members: bots.length,
     active: bots.filter((b) => liveStatus(b).status === 'running').length,
-    blocked: (DATA.blockers || []).filter((card) => ids.has(card.assignee)).length,
+    blocked: (DATA.blockers || []).filter((card) => ids.has(card.assignee)).length +
+      (DATA.remoteBlockers || []).filter((card) => card.bot && ids.has(card.bot)).length,
     hp: hps.length ? Math.round(hps.reduce((a, b) => a + b, 0) / hps.length) : null,
     hpCount: hps.length,
     xp: bots.reduce((sum, b) => sum + (Number(b.xp) || 0), 0)

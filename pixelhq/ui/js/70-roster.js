@@ -9,16 +9,21 @@ const rosterTrips = hostTrips(TRIP_MS.other, () => renderRoster());
 const rosterBusy = () => rosterTrips.busy('roster');
 const rosterResult = () => rosterTrips.result('roster');
 const rosterNew = { bot: '', zone: '', label: '', zoneRoom: '', room: '', roomLabel: '' };
-const ROSTER_BOT_KEYS = ['id', 'cls', 'title', 'zone', 'loc', 'color', 'leader', 'remote', 'sprite'];
+const ROSTER_BOT_KEYS = ['id', 'cls', 'title', 'zone', 'loc', 'color', 'leader', 'remote', 'sprite', 'source'];
 const rosterPick = (value, keys) =>
   Object.fromEntries(keys.filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]]));
 const rosterClone = (value) => JSON.parse(JSON.stringify(value));
+/* One bot of the draft: ids are unique per source, so a bot of another host is found by `<source>/<id>` (the snapshot's key),
+   a local or older remote entry by its id alone. */
+const rosterKey = (bot) => (bot.source ? bot.source + '/' + bot.id : bot.id);
 
 /* Rooms come over complete (keys the editor never touches pass through unchanged; a room without a zone list gets an
-   empty one); bots are the roster's schema keys only, because snapshot bots also carry counters. */
+   empty one); bots are the roster's schema keys only, because snapshot bots also carry counters. A bot of another host
+   is keyed "<source>/<id>" in the snapshot; the roster file names it by its own id plus `source`. */
 function rosterFromSnapshot() {
   const rooms = rosterClone(CFG().rooms).map((room) => Object.assign({}, room, { zones: room.zones || [] }));
-  return { rooms, bots: DATA.bots.map((bot) => rosterPick(bot, ROSTER_BOT_KEYS)) };
+  const entry = (bot) => rosterPick(bot.source && bot.name ? Object.assign({}, bot, { id: bot.name }) : bot, ROSTER_BOT_KEYS);
+  return { rooms, bots: DATA.bots.map(entry) };
 }
 
 function rosterInput(label, field, value) {
@@ -73,9 +78,9 @@ function rosterHeadHtml() {
 }
 
 function rosterBotHtml(bot, index) {
-  const open = rosterEditing === bot.id;
+  const open = rosterEditing === rosterKey(bot);
   return '<div class="roster-bot' + (open ? ' open' : '') + '" data-roster-bot="' + Number(index) + '"><div class="roster-row">' +
-    '<input type="text" data-roster-id value="' + esc(bot.id) + '" readonly aria-label="ID">' +
+    '<input type="text" data-roster-id value="' + esc(rosterKey(bot)) + '" readonly aria-label="ID">' +
     rosterInput('Title', 'title', bot.title) + rosterInput('Role', 'cls', bot.cls) +
     rosterSelect('Sprite', 'sprite', [['', 'auto'], ...SPRITE_VARIANTS.map((name) => [name, name])], bot.sprite || '') +
     rosterZoneSelect(bot) + rosterColourCell(bot, open) +
@@ -119,7 +124,7 @@ function bindRosterRows(root) {
     const bot = rosterDraft.bots[index];
     row.querySelectorAll('[data-roster-field]').forEach((input) => bindRosterField(input, bot));
     row.querySelector('[data-roster-edit]').onclick = () => {
-      rosterEditing = rosterEditing === bot.id ? '' : bot.id;
+      rosterEditing = rosterEditing === rosterKey(bot) ? '' : rosterKey(bot);
       renderRoster();
     };
     row.querySelectorAll('[data-roster-swatch]').forEach((btn) =>
@@ -228,7 +233,7 @@ function addRosterBot() {
   if (!validBotId(id)) {
     return rosterProblem('Bot id: use 1–64 ASCII letters, digits or ._- only.');
   }
-  if (rosterDraft.bots.some((bot) => bot.id === id)) {
+  if (rosterDraft.bots.some((bot) => rosterKey(bot) === id)) {
     return rosterProblem('Bot id already exists.');
   }
   if (rosterDraft.bots.length >= 200) {

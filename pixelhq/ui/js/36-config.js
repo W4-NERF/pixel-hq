@@ -326,7 +326,7 @@ function drawConfig(el, st) {
   }
 }
 
-const confSlotHtml = (b) => '<div class="cfg" data-cfg="' + esc(confKeyOf(b)) + '"></div>';
+const confSlotHtml = (b) => (isHostBot(b) ? '' : '<div class="cfg" data-cfg="' + esc(confKeyOf(b)) + '"></div>');
 
 /* The draft's element, when it is on the page now: the card is redrawn around it instead of replacing it. */
 function heldConfig(b) {

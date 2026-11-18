@@ -216,3 +216,12 @@ button[data-act="archive"]{color:var(--archive)}
 .hrow{display:flex;gap:8px;align-items:center;padding:2px 0;border-bottom:1px solid var(--row-line);font-size:11px}
 .hrow .hfirst{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cfg :focus-visible{outline:2px solid var(--olive);outline-offset:2px}
+/* bots of other hosts (round 5): host badge, stale badge, read-only card, per-source blocked sections, footer lines */
+.host{display:inline-block;font:9px var(--px);padding:0 4px;margin-left:4px;border:1px solid var(--line);color:var(--cron);vertical-align:middle;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.host.stale{color:var(--amber);border-color:var(--kanban-line)}
+.desk .hostb{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;margin-top:1px}.desk .hostb .host{margin-left:0;max-width:86px}
+.lc.rem{border-left-color:var(--cron)}.lc .nm .host{margin-left:8px}.lidle .n .host{margin-left:6px}
+.hostnote{margin:10px 0 0;font-size:11px;color:var(--mut2)}
+.rsrc{margin-top:14px}.rsh{font-size:11px;margin-bottom:6px;overflow-wrap:anywhere}.rsh .host{margin-left:0;margin-right:4px}
+.rbi .bh{cursor:default}.rbi .bh:hover{background:var(--clear)}.rbi .host{margin-left:6px}
+.rfoot:empty{display:none}.rfoot{padding-bottom:0}.rfl.rf-stale,.rfl.rf-unreachable,.rfl.rf-invalid{color:var(--amber)}

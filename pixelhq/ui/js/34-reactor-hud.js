@@ -99,4 +99,5 @@ function hud() {
     DATA.collectMs + ' ms · sources read-only; actions and reviews require confirmation' +
     (CFG().configError ? ' · ' + CFG().configError : '') +
     (warnings.length ? ' · Warnings: ' + warnings.join(' · ') : '');
+  renderRemoteFoot();
 }

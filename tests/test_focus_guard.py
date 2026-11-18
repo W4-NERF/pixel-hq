@@ -123,7 +123,7 @@ def test_blocked_tab_chrome_still_updates_while_the_list_waits(tmp_path):
     run_roster(tmp_path, BLOCKED_SETUP + """
 area.focus();
 send({pixelhq:{...withBlocker('Second reason'), blockers:[blocker('Second reason'), {...blocker('x'), id:'t_abcdef02'}]}});
-assert.equal(document.getElementById('blktab').textContent, 'Blocked (2)');
+assert.equal(document.getElementById('blktab').textContent, 'Blocked (' + (2 + DATA.remoteBlockers.length) + ')', 'local and remote cards');
 assert.equal(list.querySelectorAll('[data-ta]').length, 1, 'list itself is deferred');
 area.blur(); flushZeroTimers();
 assert.equal(list.querySelectorAll('[data-ta]').length, 2);

@@ -20,7 +20,17 @@ except ImportError:
     def load_config_readonly() -> dict:
         return {}
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 HERE = Path(__file__).resolve().parent
+SOURCE_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,31}")             # remote source label and ``file:`` name (round 5 §2)
+SSH_DEST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@-]{0,127}")   # ``ssh:`` destination: ``[user@]host`` or an alias
+SSH_HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")           # the part after the last ``@``
+MAX_REMOTE_SOURCES = 16
+REMOTE_RANGES = {"remote_timeout_s": (2, 30), "remote_stale_after_s": (1, 7 * 86400)}
 SPRITE_VARIANTS = ("default", "wizard", "knight", "engineer", "scout", "medic", "scribe", "rogue")
 _VERSION_LINE = re.compile(r"^version:[ \t]*[\"']?([^\"'#\s]+)", re.MULTILINE)
 
@@ -88,6 +98,8 @@ DEFAULTS: dict = {
     "xp_pass": 10, "xp_revise": 3, "xp_fail": -5,
     # GPU / LLM serving ("reactor"). Leave prometheus_url empty to hide the reactor.
     "prometheus_url": "", "metrics_prefix": "vllm", "node_aliases": {}, "model_endpoint": "",
+    # Other hosts (round 5): ``ssh:<destination>`` or ``file:<name>``; read only while a snapshot is collected.
+    "remote_sources": [], "remote_timeout_s": 8, "remote_stale_after_s": 300,
 }
 
 
@@ -139,6 +151,42 @@ def _coerce(value, expected: type):
     raise ValueError("invalid setting type")
 
 
+def valid_remote_entry(entry: str) -> bool:
+    """``ssh:<dest>`` (``[user@]host``, no leading ``-``, no space, ``:`` or control character) or ``file:<name>``.
+
+    ``fullmatch`` only: a trailing line break must not slip through ``$``.
+    """
+    kind, _, target = entry.partition(":")
+    if kind == "file":
+        return SOURCE_RE.fullmatch(target) is not None
+    return (kind == "ssh" and SSH_DEST_RE.fullmatch(target) is not None
+            and SSH_HOST_RE.fullmatch(target.rpartition("@")[2]) is not None)
+
+
+def _flag(cfg: dict, message: str, *, error: bool = True) -> None:
+    cfg["warnings"].append(message)
+    if error:
+        cfg.setdefault("config_error", message)
+
+
+def _normalise_remote(cfg: dict) -> None:
+    """Drop invalid sources, duplicates and surplus entries; clamp the two numbers. Diagnostics name the index only."""
+    kept = []
+    for index, entry in enumerate(cfg["remote_sources"]):
+        if not valid_remote_entry(entry):
+            _flag(cfg, f"remote_sources[{index}]: expected ssh:<destination> or file:<name>")
+        elif entry not in kept:
+            kept.append(entry)
+    if len(kept) > MAX_REMOTE_SOURCES:
+        _flag(cfg, f"remote_sources: at most {MAX_REMOTE_SOURCES} sources")
+        kept = kept[:MAX_REMOTE_SOURCES]
+    cfg["remote_sources"] = kept
+    for key, (low, high) in REMOTE_RANGES.items():
+        if not low <= cfg[key] <= high:
+            cfg[key] = min(max(cfg[key], low), high)
+            _flag(cfg, f"{key}: clamped to {low}..{high}", error=False)
+
+
 def _normalise(cfg: dict) -> None:
     """A malformed key cannot invalidate its readable siblings or the whole page."""
     cfg["warnings"] = []
@@ -155,6 +203,7 @@ def _normalise(cfg: dict) -> None:
         message = "appearance: expected auto, dark or light"
         cfg["warnings"].append(message)
         cfg.setdefault("config_error", message)
+    _normalise_remote(cfg)
 
 
 def load() -> dict:
@@ -187,6 +236,49 @@ def load() -> dict:
     for key in ("reviews_path", "legacy_ledger_path"):
         cfg[key] = ledger_path(cfg, key)
     return cfg
+
+
+def load_home(home: Path, warnings: list[str] | None = None) -> dict:
+    """Settings of one given Hermes home, read-only and independent of the process environment.
+
+    Used by the remote exporter, which reads several homes in one run: ``<home>/plugin-data/pixel-hq/config.json``,
+    then the plugin settings of ``<home>/config.yaml`` (``plugins.entries.pixel-hq.settings``, needs PyYAML).
+    Diagnostics name only the file and the exception type; the home path itself is never changed by a file.
+    """
+    warnings = warnings if warnings is not None else []
+    cfg = copy.deepcopy(DEFAULTS)
+    cfg["settings_source"] = "defaults"
+    home = Path(home)
+    for label, read in (("config.json", _home_json), ("config.yaml", _home_yaml)):
+        try:
+            settings = _flat_settings(read(home))
+        except Exception as exc:  # a broken file must not hide the other one
+            warnings.append(f"{label}: unreadable settings ({type(exc).__name__})")
+            continue
+        if settings:
+            cfg.update(settings)
+            cfg["settings_source"] = "file"
+    cfg["hermes_home"] = str(home)
+    _normalise(cfg)
+    warnings.extend(cfg["warnings"])
+    for key in ("reviews_path", "legacy_ledger_path"):
+        cfg[key] = ledger_path(cfg, key)
+    return cfg
+
+
+def _home_json(home: Path) -> dict:
+    path = home / "plugin-data" / "pixel-hq" / "config.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+def _home_yaml(home: Path) -> dict:
+    path = home / "config.yaml"
+    if yaml is None or not path.is_file():
+        return {}
+    settings = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for key in ("plugins", "entries", "pixel-hq", "settings"):
+        settings = settings.get(key, {}) if isinstance(settings, dict) else {}
+    return settings if isinstance(settings, dict) else {}
 
 
 def ledger_path(cfg: dict, key: str = "reviews_path") -> str:
@@ -248,6 +340,10 @@ def load_roster() -> dict:
             if "sprite" in bot and bot["sprite"] not in SPRITE_VARIANTS:
                 bot.pop("sprite")
                 warnings.append(f"roster.json: bots[{index}].sprite: expected a sprite variant")
+            if "source" in bot and not (bot.get("remote") is True and isinstance(bot["source"], str)
+                                        and SOURCE_RE.fullmatch(bot["source"])):
+                bot.pop("source")
+                warnings.append(f"roster.json: bots[{index}].source: expected a source name on a remote bot")
             bots.append(bot)
         data.update(bots=bots, rosterSource="file", warnings=warnings)
         if not has_department(data["rooms"]):
@@ -266,7 +362,7 @@ def public(cfg: dict, roster: dict) -> dict:
         "operator": cfg["operator_name"], "orchestrator": cfg["orchestrator_profile"],
         "xp": {verdict: cfg["xp_" + verdict] for verdict in ("pass", "revise", "fail")},
         "staleDays": cfg["stale_days"], "toolsDir": str(HERE),
-        "remoteBots": [b["id"] for b in roster["bots"] if b.get("remote")],
+        "remoteBots": [b["id"] for b in roster["bots"] if b.get("remote") and not b.get("source")],  # R5-D1: no source ids
         "rooms": roster["rooms"], "configError": cfg.get("config_error"),
         "configDir": str(Path(cfg.get("hermes_home") or root_home()) / "plugin-data" / "pixel-hq"), "usingExampleRoster": False,
         "rosterSource": roster.get("rosterSource", "file"),

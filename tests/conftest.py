@@ -15,6 +15,9 @@ def offline_only(tmp_path, monkeypatch):
     """No sockets or real CLIs, even if application code catches a denied attempt."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "isolated-home"))
     monkeypatch.delenv("HERMES_PROFILE", raising=False)
+    from pixelhq import remote
+
+    remote.reset()  # the last good remote documents live in module memory: no test inherits another's
     denied = []
     def no_network(*args, **kwargs):
         denied.append("network")

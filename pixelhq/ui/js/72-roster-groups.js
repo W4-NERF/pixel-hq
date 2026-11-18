@@ -132,7 +132,7 @@ function opZoneRemove(id) {
 
 /* A bot moves to another existing department: the Office floor's drag and its "Move to…" select. */
 function opBotZone(botId, zoneId) {
-  const bot = rosterDraft.bots.find((candidate) => candidate.id === botId);
+  const bot = rosterDraft.bots.find((candidate) => rosterKey(candidate) === botId);
   if (!bot || !rosterZoneById(zoneId) || bot.zone === zoneId) {
     return false;
   }

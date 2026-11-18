@@ -58,9 +58,23 @@ function deskHtml(b, edit) {
   return '<div class="desk st-' + esc(lst) + (ofilter !== 'all' && lst !== ofilter ? ' dim' : '') +
     '" tabindex="0" data-id="' + esc(b.id) + '" title="' + esc(b.id) + ' – ' + esc(ST[lst]) +
     (b.quest ? ': ' + esc(b.quest) : '') + '"><div class="holder">' + sprite(b, 4) + bubble(b) +
-    '</div><div class="tbl"></div><div class="nm">' + esc(b.id) +
-    '</div><div class="mut" style="font-size:9px">LVL ' + Number(b.lvl) + ' · HP ' + hpTxt(b) + '</div>' +
+    '</div><div class="tbl"></div><div class="nm">' + esc(botLabel(b)) + '</div>' +
+    (isHostBot(b) ? '<div class="hostb">' + hostBadges(b) + '</div>' : '') +
+    '<div class="mut" style="font-size:9px">LVL ' + Number(b.lvl) + ' · HP ' + hpTxt(b) + '</div>' +
     (edit ? moveToHtml(b) : '') + '</div>';
+}
+
+/* A roster-draft entry that the snapshot no longer holds (R5-D2). An entry of another host keeps its full `<source>/<id>` key,
+   its host badge and the read-only card, shown as `unknown`; it never takes the id of a local profile. */
+function draftOnlyBot(draftBot) {
+  const base = { lvl: 1, xp: 0, xpPct: 0, hp: null, status: 'idle', quest: '', blocked: 0, ...draftBot };
+  if (!draftBot.source) {
+    return base;
+  }
+  return {
+    ...base, id: rosterKey(draftBot), name: draftBot.id, remote: true, status: 'offline', remoteStatus: 'unknown',
+    stale: true, sourceState: 'unknown', asOf: null, currentStep: '', lastTool: '', lastActivity: null, model: 'remote'
+  };
 }
 
 /* The bots on the floor: the snapshot's, or in edit mode the draft's bots (placement) joined with their snapshot data. */
@@ -69,10 +83,17 @@ function floorBots(edit) {
     return DATA.bots;
   }
   return rosterDraft.bots.map((draftBot) => {
-    const shown = DATA.bots.find((b) => b.id === draftBot.id) ||
-      { lvl: 1, hp: null, status: 'idle', quest: '', blocked: 0, ...draftBot };
+    const shown = DATA.bots.find((b) => b.id === rosterKey(draftBot)) || draftOnlyBot(draftBot);
     return { ...shown, zone: draftBot.zone };
   });
+}
+
+/* The bot behind a selection key: the snapshot's, or while the layout is edited a draft entry of another host that the
+   snapshot lacks (only those have a read-only card to show; a local draft entry has nothing to open). */
+function botByKey(key) {
+  const found = DATA.bots.find((b) => b.id === key);
+  const draft = !found && layoutEditing() && rosterDraft && rosterDraft.bots.find((b) => b.source && rosterKey(b) === key);
+  return found || (draft ? draftOnlyBot(draft) : undefined);
 }
 
 function drawFloor() {
@@ -147,7 +168,7 @@ function office() {
   renderBanner();
   renderLayoutBar();
   renderUnlessFocused(document.getElementById('floor'), drawFloor);
-  if (!sel || !DATA.bots.find((b) => b.id === sel)) {
+  if (!sel || !botByKey(sel)) {
     sel = (DATA.bots.find((b) => b.leader) || DATA.bots[0] || {}).id;
   }
   select(sel);

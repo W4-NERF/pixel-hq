@@ -31,7 +31,7 @@ if __name__ == "__main__" and not __package__:  # run as a script: python3 pixel
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     __package__ = "pixelhq"
 from . import config as cfgmod
-from . import dbutil, scoring
+from . import dbutil, remote, remote_merge, scoring
 from . import profiles as profilemod
 from .blockers import ALLOWED as ALLOWED  # re-exported: actions.py and demo.py read the policy from here
 from .blockers import read_blockers
@@ -213,35 +213,62 @@ def default_department(rooms: list) -> str | None:
     return ordered[0]["id"] if ordered else None
 
 
+def recruit_entry(name: str, role: str, roster: dict, cfg: dict, warnings: list[str]) -> dict | None:
+    """Roster entry for a bot that has none (R3-D1): the first department of the main room, flagged ``auto``.
+
+    ``None`` (with a warning) when the roster is a file without any department to put the bot in.
+    """
+    zone = default_department(roster["rooms"])
+    generated = roster.get("rosterSource") == "generated"
+    if not generated and zone is None:
+        warnings.append(clip(f"roster: no department for new profile {name}", 120))
+        return None
+    leader = generated and name == cfg["orchestrator_profile"]
+    role = "".join(ch for ch in " ".join(str(role or "").split()) if not cfgmod.text_rejected(ch))
+    return {"id": name, "cls": clip(role, 40) or "Hermes profile",
+            "title": "Recruit", "zone": ("command" if leader else "crew") if generated else zone,
+            **({"leader": True} if leader else {}),
+            "loc": "", "color": _color_for(name), "auto": True}
+
+
 def roster_bots(profiles: dict, warnings: list[str] | None = None, *,
                 roster: dict | None = None, cfg: dict | None = None) -> list:
-    """Keep real/remote entries and auto-recruit local profiles missing from the roster."""
+    """Keep real/remote entries and auto-recruit local profiles missing from the roster.
+
+    Entries that name a ``source`` belong to another host's bots: ``remote_merge`` places them, never this list.
+    """
     roster = cfgmod.load_roster() if roster is None else roster
     cfg = cfgmod.load() if cfg is None else cfg
     warnings = warnings if warnings is not None else []
     bots = []
     for bot in roster["bots"]:
+        if bot.get("source"):
+            continue
         if bot["id"] in profiles or bot.get("remote"):
             bots.append(dict(bot))
         else:
             warnings.append(clip(f"roster: dropped nonexistent profile {bot['id']}", 120))
     known = {b["id"] for b in bots}
-    rooms = roster["rooms"]
-    zone = default_department(rooms)
-    generated = roster.get("rosterSource") == "generated"
     for name in sorted(profiles):
         if name not in known:
-            if not generated and zone is None:
-                warnings.append(clip(f"roster: no department for new profile {name}", 120))
-                continue
-            leader = generated and name == cfg["orchestrator_profile"]
-            role = "".join(ch for ch in " ".join(str(profiles[name].get("description") or "").split())
-                           if not cfgmod.text_rejected(ch))
-            bots.append({"id": name, "cls": clip(role, 40) or "Hermes profile",
-                         "title": "Recruit", "zone": ("command" if leader else "crew") if generated else zone,
-                         **({"leader": True} if leader else {}),
-                         "loc": "", "color": _color_for(name), "auto": True})
+            entry = recruit_entry(name, profiles[name].get("description"), roster, cfg, warnings)
+            if entry:
+                bots.append(entry)
     return bots
+
+
+def read_remote(cfg: dict, roster_data: dict, local: list, warnings: list[str]) -> dict:
+    """Other hosts' bots, cards and boards (round 5). Their failure never takes the local snapshot down."""
+    try:
+        sources = remote.fetch_all(cfg.get("remote_sources", []), timeout=cfg.get("remote_timeout_s", 8),
+                                   root=cfg["hermes_home"])
+        return remote_merge.merge(
+            sources, roster_data, local, stale_days=cfg["stale_days"], stale_after=cfg.get("remote_stale_after_s", 300),
+            now=time.time(), warnings=warnings,
+            recruit=lambda key, role, notes: recruit_entry(key, role, roster_data, cfg, notes))
+    except Exception as exc:
+        warnings.append(clip(f"remote sources: unavailable ({type(exc).__name__})", 120))
+        return {"bots": [], "blockers": [], "boards": [], "sources": [], "consumed": set()}
 
 
 def collect() -> dict:
@@ -262,6 +289,8 @@ def collect() -> dict:
     kevents = kanban.events
     warnings.extend(kanban.warnings)
     roster = roster_bots(profiles, warnings, roster=roster_data, cfg=cfg)
+    merged = read_remote(cfg, roster_data, roster, warnings)
+    roster = [bot for bot in roster if bot["id"] not in merged["consumed"]]
     scores = scoring.compute([bot["id"] for bot in roster], kanban, reviews, cfg)
     hallu = collections.Counter(e["bot"] for e in kevents
                                 if e["kind"] == "suspected_hallucinated_references" and e["ts"] > since)
@@ -305,6 +334,7 @@ def collect() -> dict:
                  lastActivity=last, lastQc=last_qc.get(bid) or None, hallu7d=hallu.get(bid, 0))
         b["achievements"] = achievements(b)
         bots.append(b)
+    bots.extend(merged["bots"])
     blockers, berrs = read_blockers(cfg, roster_data)
     warnings.extend(clip(error, 120) for error in berrs)
     known = {b["id"] for b in bots}
@@ -312,6 +342,7 @@ def collect() -> dict:
     events.sort(key=lambda e: e["ts"], reverse=True)
     return {"generated": now, "bots": bots, "reactor": read_reactor(cfg), "events": events[:40],
             "blockers": blockers, "boardErrors": berrs, "warnings": warnings,
+            "remoteSources": merged["sources"], "remoteBlockers": merged["blockers"], "remoteBoards": merged["boards"],
             "unassigned": {k: len(v) for k, v in quests.items() if k not in known},
             "cfg": cfgmod.public(cfg, roster_data), "collectMs": round(1000 * (time.time() - t0))}
 

@@ -13,15 +13,16 @@ EXPECTED_DEFAULTS = {
     "xp_pass": 10, "xp_revise": 3, "xp_fail": -5, "stale_days": 14, "exclude_boards": [],
     "needs_input_keywords": ["approval", "approve", "decision", "sign-off", "gate", "waiting for", "go"],
     "prometheus_url": "", "metrics_prefix": "vllm", "model_endpoint": "", "node_aliases": {},
+    "remote_sources": [], "remote_timeout_s": 8, "remote_stale_after_s": 300,
 }
 
 
-def test_manifest_has_all_19_settings_with_typed_defaults_and_descriptions():
+def test_manifest_has_all_22_settings_with_typed_defaults_and_descriptions():
     import yaml
 
     manifest = yaml.safe_load((ROOT / "plugin.yaml").read_text(encoding="utf-8"))
     schema = manifest["config_schema"]
-    assert len(schema) == 19
+    assert len(schema) == 22
     assert schema.keys() == EXPECTED_DEFAULTS.keys()
     assert config.DEFAULTS == EXPECTED_DEFAULTS
     types = {str: "str", int: "int", bool: "bool", list: "list", dict: "dict"}
@@ -240,7 +241,7 @@ def test_demo_uses_flat_weights_for_buckets_and_sources(monkeypatch):
     monkeypatch.setattr(demo.cfgmod, "DEFAULTS", demo.cfgmod.DEFAULTS | weights)
     snapshot = demo.snapshot(seed=6)
     assert snapshot["cfg"]["xp"] == {"pass": 17, "revise": 4, "fail": -8}
-    for bot in snapshot["bots"]:
+    for bot in (b for b in snapshot["bots"] if not b.get("source")):  # bots of other hosts carry the document's XP
         def raw(counts):
             return sum(count * weights["xp_" + verdict]
                        for verdict, count in zip(("pass", "revise", "fail"), counts, strict=True))

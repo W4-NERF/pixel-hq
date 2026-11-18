@@ -11,6 +11,10 @@ function bars(b) {
 }
 
 function detail(b) {
+  if (isHostBot(b)) {
+    hostDetail(b);
+    return;
+  }
   const held = heldConfig(b);
   const a = b.attrs.map((v, i) =>
     '<div class="attr" title="' + ATTR_T[i] + '"><span>' + ATTR[i] + '</span><div class="bar at"><b style="width:' +
@@ -55,7 +59,7 @@ function detail(b) {
 }
 
 function showDetail() {
-  const b = DATA.bots.find((x) => x.id === sel);
+  const b = botByKey(sel);
   if (b) {
     detail(b);
   }

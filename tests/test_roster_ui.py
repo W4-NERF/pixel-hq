@@ -12,12 +12,12 @@ from pixelhq.demo import snapshot
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_roster(tmp_path, probe, *, actions="", iframe=False):
+def run_roster(tmp_path, probe, *, actions="", iframe=False, data=None):
     source = (ROOT / "tests" / "ui_dom.cjs").read_text(encoding="utf-8")
     markup = (ROOT / "pixelhq" / "ui" / "index.html").read_text(encoding="utf-8").split("<body>")[1].split("<script>")[0]
     source += "document.getElementById('test-root').innerHTML=" + json.dumps(markup) + ";\n"
     app = page.bundle_js()
-    source += app.replace("/*PIXELHQ_DATA*/null", json.dumps(snapshot())) + ";\n(()=>{\n" + probe + "\n})();\n"
+    source += app.replace("/*PIXELHQ_DATA*/null", json.dumps(snapshot() if data is None else data)) + ";\n(()=>{\n" + probe + "\n})();\n"
     source += "\nconsole.log('roster UI behavior: ok');\n"
     script = tmp_path / "roster-ui.cjs"
     script.write_text(source, encoding="utf-8")

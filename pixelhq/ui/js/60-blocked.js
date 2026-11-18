@@ -118,7 +118,7 @@ function onActionResult(r) {
 
 function blk() {
   const all = DATA.blockers || [];
-  document.getElementById('blktab').textContent = 'Blocked (' + all.length + ')';
+  document.getElementById('blktab').textContent = 'Blocked (' + (all.length + (DATA.remoteBlockers || []).length) + ')';
   const cnt = (k) => all.filter((b) => k === 'all' || b.cat === k).length;
   document.getElementById('bcats').innerHTML = ['all', ...Object.keys(CAT)].map((k) =>
     '<button class="chip' + (bcat === k ? ' on' : '') + '" data-bc="' + k + '" title="' +
@@ -147,6 +147,7 @@ function blk() {
     ' that reviews the cards in the current selection (without "waiting upstream") ' +
     'and proposes one decision package. Nothing is changed without your go.';
   renderUnlessFocused(document.getElementById('blist'), blockList);
+  renderRemoteBlocked();
   document.querySelectorAll('[data-bc]').forEach((x) =>
     (x.onclick = () => {
       bcat = x.dataset.bc;
@@ -199,6 +200,9 @@ function blockList() {
   document.querySelectorAll('.bi .bh').forEach((h) =>
     (h.onclick = () => {
       const k = h.parentNode.dataset.k;
+      if (k === undefined) {
+        return; // a card of another host (62-remote-blocked.js) has nothing to open
+      }
       bopen.has(k) ? bopen.delete(k) : bopen.add(k);
       h.parentNode.classList.toggle('open');
     })

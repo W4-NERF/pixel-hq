@@ -138,6 +138,9 @@ function shortStep(st) {
 }
 
 function liveStatus(b) {
+  if (isHostBot(b)) {
+    return hostStatus(b);
+  }
   const v = liveOf(b.id);
   if (!v) {
     return { status: b.status, label: null };

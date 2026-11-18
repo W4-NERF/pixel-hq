@@ -307,7 +307,7 @@ assert.ok(box('facts').querySelector('[data-cfg-more]'));
 
 def test_every_demo_profile_is_synthetic_and_valid(tmp_path):
     run_ui(tmp_path, r"""
-const ids = DATA.bots.map((b) => b.id);
+const ids = DATA.bots.filter((b) => !b.source).map((b) => b.id);
 assert.deepEqual(Object.keys(DATA.demoProfiles).sort(), ids.slice().sort());
 for (const id of ids) {
   const p = cleanProfile({...DATA.demoProfiles[id], soulHash: HASH});
@@ -315,8 +315,8 @@ for (const id of ids) {
   assert.equal(soulProblem(p.soul), '');
   assert.ok(p.skills.length >= 4 && p.model.default && p.mcp.length >= 1);
 }
-assert.ok(DATA.bots.some((b) => lostMessaging(DATA.demoProfiles[b.id].soul, 'x')), 'one demo SOUL has the messaging section');
-assert.ok(DATA.bots.some((b) => !lostMessaging(DATA.demoProfiles[b.id].soul, 'x')));
+assert.ok(ids.some((id) => lostMessaging(DATA.demoProfiles[id].soul, 'x')), 'one demo SOUL has the messaging section');
+assert.ok(ids.some((id) => !lostMessaging(DATA.demoProfiles[id].soul, 'x')));
 """, iframe=False)
 
 
@@ -1144,8 +1144,9 @@ assert.ok(!box('status').innerHTML.includes('<script>') && box('status').innerHT
 def test_demo_snapshot_has_synthetic_describe_answers_only(tmp_path):
     data = snapshot()
     text = json.dumps(data["demoProfiles"])
-    assert set(data["demoProfiles"]) == {b["id"] for b in data["bots"]}
-    assert text.count("synthetic demo profile") == len(data["bots"])
+    local = [b for b in data["bots"] if not b.get("source")]  # no profile of another host is described (read-only)
+    assert set(data["demoProfiles"]) == {b["id"] for b in local}
+    assert text.count("synthetic demo profile") == len(local)
     for banned in ("/home/", "@", "http://", "https://"):
         assert banned not in text
     leader = data["demoProfiles"][next(b["id"] for b in data["bots"] if b.get("leader"))]
